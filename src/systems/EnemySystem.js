@@ -110,11 +110,9 @@ export function killEnemy(scene, enemyIndex) {
   scene.score += scoreGain;
   scene.chips += chipGain;
 
-  scene.gainText.setText("+" + scoreGain.toLocaleString("es-AR"));
-
-  scene.time.delayedCall(420, () => {
-    scene.gainText.setText("");
-  });
+  if (scene.ui?.showScoreGain) {
+    scene.ui.showScoreGain(scoreGain);
+  }
 
   scene.addHitEffect(enemy.x, enemy.y, 0xff4420, 28);
 

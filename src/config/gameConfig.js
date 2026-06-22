@@ -5,7 +5,7 @@ export const SATAN_ROUND = 66;
 export const REEL_COUNT = 3;
 export const SLOTS_PER_REEL = 6;
 
-export function createPhaserConfig(MainScene) {
+export function createPhaserConfig(BootScene, MainScene) {
   return {
     type: Phaser.AUTO,
     parent: "game",
@@ -16,6 +16,6 @@ export function createPhaserConfig(MainScene) {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    scene: MainScene
+    scene: [BootScene, MainScene]
   };
 }

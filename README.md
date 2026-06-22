@@ -30,7 +30,9 @@ Cubre `MagazineSystem` (cargadores, tokens, slots vacíos) y funciones de balanc
 
 ## Controles
 
-- **Combate:** WASD mover, mouse apuntar, click disparar, Shift/Space dash
+- **Combate:** WASD mover, mouse apuntar, click disparar, Shift/Space dash, **Q** expandir/colapsar ruletas
+
+Iconos UI via [Lucide](https://lucide.dev) (fichas, combo, puntuación, tokens, etc.).
 - **Tienda:** TAB cambiar sección, A/D elegir, E comprar, R reroll, F avanzar
 - **Colocar token:** flechas mover cursor, E colocar
 
@@ -45,6 +47,7 @@ src/
 ├── systems/             # Lógica de combate, tienda, boss, etc.
 ├── rendering/           # Dibujo de arena, entidades y HUD
 ├── effects/             # Efectos visuales y mensajes flotantes
+├── ui/                  # UIManager, marcos, tema visual
 └── scenes/MainScene.js  # Orquestador principal
 tests/                   # Vitest: balance + MagazineSystem
 ```

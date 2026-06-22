@@ -12,13 +12,3 @@ body {
   width: 100vw;
   height: 100vh;
 }
-
-.hint {
-  position: fixed;
-  left: 12px;
-  bottom: 8px;
-  color: rgba(245, 212, 122, 0.72);
-  font: 13px Arial, sans-serif;
-  pointer-events: none;
-  z-index: 10;
-}

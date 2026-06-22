@@ -8,7 +8,6 @@ import {
 } from "../effects/EffectsSystem.js";
 import { drawArena, drawCrosshair } from "../rendering/ArenaRenderer.js";
 import { drawWorldEntities } from "../rendering/EntityRenderer.js";
-import { drawHUD } from "../rendering/HudRenderer.js";
 import { updateBoss } from "../systems/BossSystem.js";
 import { updateBullets } from "../systems/BulletSystem.js";
 import { updateCombo } from "../systems/ComboSystem.js";
@@ -17,6 +16,7 @@ import { updateHazards } from "../systems/HazardSystem.js";
 import { handlePlayerMovement } from "../systems/PlayerSystem.js";
 import { tryShoot, tryShootIfHeld } from "../systems/ShootingSystem.js";
 import { enterShop, generateShopOffers, updateShop } from "../systems/ShopSystem.js";
+import { UIManager } from "../ui/UIManager.js";
 
 export class MainScene extends Phaser.Scene {
   constructor() {
@@ -25,11 +25,12 @@ export class MainScene extends Phaser.Scene {
 
   create() {
     this.graphics = this.add.graphics();
-    this.uiGraphics = this.add.graphics().setDepth(100);
 
     initRunState(this);
     this.createKeyboard();
-    this.createTexts();
+
+    this.ui = new UIManager(this);
+    this.ui.create();
 
     generateShopOffers(this);
 
@@ -47,7 +48,6 @@ export class MainScene extends Phaser.Scene {
     const dt = deltaMs / 1000;
 
     this.graphics.clear();
-    this.uiGraphics.clear();
 
     drawArena(this);
 
@@ -66,7 +66,9 @@ export class MainScene extends Phaser.Scene {
     drawWorldEntities(this);
     drawCrosshair(this);
     drawHitEffects(this);
-    drawHUD(this);
+    if (this.ui) {
+      this.ui.update(dt);
+    }
   }
 
   updateCombat(dt) {
@@ -95,6 +97,8 @@ export class MainScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
       resetRunState(this);
       generateShopOffers(this);
+      this.objectiveText.setText("TIENDA INICIAL · ELEGÍ 2 TOKENS GRATIS");
+      this.shopText.setText("");
     }
   }
 
@@ -109,83 +113,13 @@ export class MainScene extends Phaser.Scene {
       E: "E",
       R: "R",
       F: "F",
+      Q: "Q",
       TAB: "TAB",
       LEFT: "LEFT",
       RIGHT: "RIGHT",
       UP: "UP",
       DOWN: "DOWN"
     });
-  }
-
-  createTexts() {
-    const baseTextStyle = {
-      fontFamily: "Georgia",
-      color: "#f7d47a",
-      stroke: "#160000",
-      strokeThickness: 4
-    };
-
-    this.floorText = this.add.text(28, 22, "", {
-      ...baseTextStyle,
-      fontSize: "24px"
-    }).setDepth(110);
-
-    this.objectiveText = this.add.text(GAME_WIDTH / 2, 24, "", {
-      ...baseTextStyle,
-      fontSize: "24px",
-      color: "#ff5a5a",
-      align: "center"
-    }).setOrigin(0.5, 0).setDepth(110);
-
-    this.hpText = this.add.text(28, GAME_HEIGHT - 78, "HP", {
-      ...baseTextStyle,
-      fontSize: "28px"
-    }).setDepth(110);
-
-    this.comboText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 190, "COMBO x1", {
-      ...baseTextStyle,
-      fontSize: "40px",
-      color: "#ffb53a"
-    }).setOrigin(0.5).setDepth(110);
-
-    this.gainText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 226, "", {
-      ...baseTextStyle,
-      fontSize: "24px",
-      color: "#ffffff"
-    }).setOrigin(0.5).setDepth(110);
-
-    this.reelResultText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 122, "?   ?   ?", {
-      ...baseTextStyle,
-      fontSize: "42px",
-      color: "#ffd86a"
-    }).setOrigin(0.5).setDepth(110);
-
-    this.magazineText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 72, "", {
-      ...baseTextStyle,
-      fontSize: "22px",
-      color: "#ffd64a",
-      align: "center"
-    }).setOrigin(0.5).setDepth(110);
-
-    this.modsText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 43, "", {
-      ...baseTextStyle,
-      fontSize: "18px",
-      color: "#fff1b8",
-      align: "center"
-    }).setOrigin(0.5).setDepth(110);
-
-    this.rightPanelText = this.add.text(GAME_WIDTH - 245, GAME_HEIGHT - 170, "", {
-      ...baseTextStyle,
-      fontSize: "24px",
-      align: "right"
-    }).setDepth(110);
-
-    this.shopText = this.add.text(GAME_WIDTH / 2, 82, "", {
-      ...baseTextStyle,
-      fontSize: "20px",
-      color: "#fff1b8",
-      align: "center"
-    }).setOrigin(0.5, 0).setDepth(110);
   }
 
   addHitEffect(x, y, color, radius) {

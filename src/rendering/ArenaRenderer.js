@@ -59,11 +59,14 @@ export function drawCrosshair(scene) {
   const x = pointer.worldX;
   const y = pointer.worldY;
 
-  g.lineStyle(2, COLORS.paleGold, 0.9);
-  g.strokeCircle(x, y, 10);
+  g.lineStyle(2, COLORS.paleGold, 0.95);
+  g.strokeCircle(x, y, 12);
 
-  g.lineBetween(x - 16, y, x - 6, y);
-  g.lineBetween(x + 6, y, x + 16, y);
-  g.lineBetween(x, y - 16, x, y - 6);
-  g.lineBetween(x, y + 6, x, y + 16);
+  g.fillStyle(COLORS.paleGold, 0.9);
+  g.fillCircle(x, y, 2);
+
+  g.lineBetween(x - 18, y, x - 8, y);
+  g.lineBetween(x + 8, y, x + 18, y);
+  g.lineBetween(x, y - 18, x, y - 8);
+  g.lineBetween(x, y + 8, x, y + 18);
 }
