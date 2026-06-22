@@ -1,0 +1,24 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #050202;
+  overflow: hidden;
+}
+
+#game {
+  width: 100vw;
+  height: 100vh;
+}
+
+.hint {
+  position: fixed;
+  left: 12px;
+  bottom: 8px;
+  color: rgba(245, 212, 122, 0.72);
+  font: 13px Arial, sans-serif;
+  pointer-events: none;
+  z-index: 10;
+}
