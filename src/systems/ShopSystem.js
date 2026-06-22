@@ -4,24 +4,21 @@ import {
   getWaveSize,
   SHOP_REROLL_COST
 } from "../config/balance.js";
-import { REEL_COUNT, SATAN_ROUND, SLOTS_PER_REEL } from "../config/gameConfig.js";
+import { PASSIVE_OFFER_COUNT, TOKEN_OFFER_COUNT } from "../ui/shopLayout.js";
+import { SATAN_ROUND } from "../config/gameConfig.js";
 import { refreshBaseMagazine } from "../core/MagazineSystem.js";
 import { PASSIVE_CATALOG } from "../data/shopPassives.js";
 import { TOKEN_KEYS, TOKENS } from "../data/tokens.js";
 import { startBossFight } from "./BossSystem.js";
 import { spawnWave } from "./EnemySystem.js";
 
-export function getCurrentOffers(scene) {
-  return scene.shopSection === "tokens" ? scene.tokenOffers : scene.passiveOffers;
-}
-
 export function generateShopOffers(scene) {
-  scene.tokenOffers = Array.from({ length: 3 }, () => {
+  scene.tokenOffers = Array.from({ length: TOKEN_OFFER_COUNT }, () => {
     const key = Phaser.Utils.Array.GetRandom(TOKEN_KEYS);
     return {
       type: "token",
       key,
-      name: "TOKEN " + TOKENS[key].name,
+      name: TOKENS[key].name,
       description: TOKENS[key].shopDescription,
       cost: scene.phase === "initialShop" ? 0 : getTokenCost(key, scene.round)
     };
@@ -29,9 +26,10 @@ export function generateShopOffers(scene) {
 
   const passives = PASSIVE_CATALOG.map((item) => ({ ...item }));
   Phaser.Utils.Array.Shuffle(passives);
-  scene.passiveOffers = passives.slice(0, 3);
+  scene.passiveOffers = passives.slice(0, PASSIVE_OFFER_COUNT);
 
-  scene.shopSelection = 0;
+  scene.shopHoverToken = -1;
+  scene.shopHoverPassive = -1;
 }
 
 function applyPassiveEffect(scene, effect) {
@@ -60,53 +58,46 @@ function applyPassiveEffect(scene, effect) {
   }
 }
 
-export function buyOrChooseSelectedOffer(scene) {
-  const offers = getCurrentOffers(scene);
-  const offer = offers[scene.shopSelection];
-
+export function buyTokenOffer(scene, index) {
+  const offer = scene.tokenOffers[index];
   if (!offer) return;
 
-  if (offer.type === "token") {
-    if (scene.phase === "initialShop") {
-      if (scene.freeTokensRemaining <= 0) return;
+  if (scene.phase === "initialShop") {
+    if (scene.freeTokensRemaining <= 0) return;
 
-      scene.placingToken = offer.key;
-      scene.objectiveText.setText("COLOCÁ TOKEN GRATIS: " + TOKENS[offer.key].name);
-      return;
-    }
-
-    if (scene.chips < offer.cost) {
-      scene.showFloatingMessage("SIN FICHAS", offer.name);
-      return;
-    }
-
-    scene.chips -= offer.cost;
     scene.placingToken = offer.key;
-    scene.objectiveText.setText("COLOCÁ TOKEN: " + TOKENS[offer.key].name);
+    scene.objectiveText.setText("COLOCÁ TOKEN GRATIS: " + TOKENS[offer.key].name);
     return;
   }
 
-  if (offer.type === "passive") {
-    if (scene.phase === "initialShop") {
-      scene.showFloatingMessage("BLOQUEADO", "primero elegí tus tokens gratis");
-      return;
-    }
-
-    if (scene.chips < offer.cost) {
-      scene.showFloatingMessage("SIN FICHAS", offer.name);
-      return;
-    }
-
-    scene.chips -= offer.cost;
-    applyPassiveEffect(scene, offer.effect);
-    scene.showFloatingMessage("COMPRADO", offer.name);
-    offers.splice(scene.shopSelection, 1);
-    scene.shopSelection = Phaser.Math.Clamp(
-      scene.shopSelection,
-      0,
-      Math.max(0, offers.length - 1)
-    );
+  if (scene.chips < offer.cost) {
+    scene.showFloatingMessage("SIN FICHAS", offer.name);
+    return;
   }
+
+  scene.chips -= offer.cost;
+  scene.placingToken = offer.key;
+  scene.objectiveText.setText("COLOCÁ TOKEN: " + TOKENS[offer.key].name);
+}
+
+export function buyPassiveOffer(scene, index) {
+  const offer = scene.passiveOffers[index];
+  if (!offer) return;
+
+  if (scene.phase === "initialShop") {
+    scene.showFloatingMessage("BLOQUEADO", "primero elegí tus tokens gratis");
+    return;
+  }
+
+  if (scene.chips < offer.cost) {
+    scene.showFloatingMessage("SIN FICHAS", offer.name);
+    return;
+  }
+
+  scene.chips -= offer.cost;
+  applyPassiveEffect(scene, offer.effect);
+  scene.showFloatingMessage("COMPRADO", offer.name);
+  scene.passiveOffers.splice(index, 1);
 }
 
 export function placeTokenInSelectedSlot(scene) {
@@ -121,7 +112,7 @@ export function placeTokenInSelectedSlot(scene) {
 
     if (scene.freeTokensRemaining <= 0) {
       scene.placingToken = null;
-      scene.objectiveText.setText("LISTO · F PARA EMPEZAR LA RUN");
+      scene.objectiveText.setText("LISTO · CONTINUAR PARA EMPEZAR LA RUN");
       generateShopOffers(scene);
       return;
     }
@@ -135,8 +126,13 @@ export function placeTokenInSelectedSlot(scene) {
   }
 
   scene.placingToken = null;
-  scene.objectiveText.setText("TOKEN COLOCADO: " + tokenName + " · F PARA DESCENDER");
+  scene.objectiveText.setText("TOKEN COLOCADO: " + tokenName + " · CONTINUAR PARA DESCENDER");
   generateShopOffers(scene);
+}
+
+export function setPlacementCursor(scene, reelIndex, slotIndex) {
+  scene.placeReelIndex = reelIndex;
+  scene.placeSlotIndex = slotIndex;
 }
 
 export function rerollShop(scene) {
@@ -154,6 +150,24 @@ export function rerollShop(scene) {
   generateShopOffers(scene);
 }
 
+export function continueShop(scene) {
+  if (scene.placingToken) return;
+
+  if (scene.phase === "initialShop") {
+    if (scene.freeTokensRemaining <= 0) {
+      startRun(scene);
+    } else {
+      scene.showFloatingMessage(
+        "ELEGÍ TOKENS",
+        "te quedan " + scene.freeTokensRemaining + " gratis"
+      );
+    }
+    return;
+  }
+
+  descendToNextRound(scene);
+}
+
 export function startRun(scene) {
   scene.phase = "combat";
   scene.hasStartedRun = true;
@@ -169,7 +183,7 @@ export function enterShop(scene) {
   scene.hazards = [];
 
   scene.objectiveText.setText(
-    "RONDA LIMPIA · COMPRÁ PASIVAS/TOKENS O PRESIONÁ F PARA DESCENDER"
+    "RONDA LIMPIA · COMPRÁ O CONTINUÁ PARA DESCENDER"
   );
 
   generateShopOffers(scene);
@@ -194,69 +208,10 @@ export function descendToNextRound(scene) {
   spawnWave(scene, getWaveSize(scene.round));
 }
 
-export function updateShop(scene) {
+export function getTooltipTokenIndex(scene) {
   if (scene.placingToken) {
-    updateTokenPlacement(scene);
-    return;
+    return -1;
   }
 
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.TAB)) {
-    scene.shopSection = scene.shopSection === "tokens" ? "passives" : "tokens";
-    scene.shopSelection = 0;
-  }
-
-  const offers = getCurrentOffers(scene);
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.A)) {
-    scene.shopSelection = Phaser.Math.Wrap(scene.shopSelection - 1, 0, offers.length);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.D)) {
-    scene.shopSelection = Phaser.Math.Wrap(scene.shopSelection + 1, 0, offers.length);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.E)) {
-    buyOrChooseSelectedOffer(scene);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.R)) {
-    rerollShop(scene);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.F)) {
-    if (scene.phase === "initialShop") {
-      if (scene.freeTokensRemaining <= 0) {
-        startRun(scene);
-      } else {
-        scene.showFloatingMessage(
-          "ELEGÍ TOKENS",
-          "te quedan " + scene.freeTokensRemaining + " gratis"
-        );
-      }
-    } else {
-      descendToNextRound(scene);
-    }
-  }
-}
-
-function updateTokenPlacement(scene) {
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.LEFT)) {
-    scene.placeSlotIndex = Phaser.Math.Wrap(scene.placeSlotIndex - 1, 0, SLOTS_PER_REEL);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.RIGHT)) {
-    scene.placeSlotIndex = Phaser.Math.Wrap(scene.placeSlotIndex + 1, 0, SLOTS_PER_REEL);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.UP)) {
-    scene.placeReelIndex = Phaser.Math.Wrap(scene.placeReelIndex - 1, 0, REEL_COUNT);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.DOWN)) {
-    scene.placeReelIndex = Phaser.Math.Wrap(scene.placeReelIndex + 1, 0, REEL_COUNT);
-  }
-
-  if (Phaser.Input.Keyboard.JustDown(scene.keys.E)) {
-    placeTokenInSelectedSlot(scene);
-  }
+  return scene.shopHoverToken;
 }

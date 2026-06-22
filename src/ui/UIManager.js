@@ -1,50 +1,45 @@
 import { COLORS } from "../config/colors.js";
+import { SHOP_REROLL_COST } from "../config/balance.js";
 import { GAME_HEIGHT, GAME_WIDTH, REEL_COUNT, SATAN_ROUND, SLOTS_PER_REEL } from "../config/gameConfig.js";
-import { getCurrentOffers } from "../systems/ShopSystem.js";
+import {
+  buyPassiveOffer,
+  buyTokenOffer,
+  continueShop,
+  getTooltipTokenIndex,
+  placeTokenInSelectedSlot,
+  rerollShop,
+  setPlacementCursor
+} from "../systems/ShopSystem.js";
 import { TOKENS } from "../data/tokens.js";
+import {
+  getReelBlockBounds,
+  getReelPanelHeight,
+  getReelPanelY,
+  getReelSlotBounds,
+  getReelTitleY,
+  hitTestReelSlot,
+  REEL_LAYOUT
+} from "./reelLayout.js";
+import {
+  getChipsBarBounds,
+  getContinueButtonBounds,
+  getPassiveCardBounds,
+  getRerollButtonBounds,
+  getShopTitleY,
+  getTokenTileBounds,
+  getTooltipPosition,
+  hitTestContinueButton,
+  hitTestPassiveCard,
+  hitTestRerollButton,
+  hitTestTokenTile,
+  PASSIVE_OFFER_COUNT,
+  SHOP_LAYOUT,
+  TOKEN_OFFER_COUNT
+} from "./shopLayout.js";
 import { drawDashRing, drawOrnateBar, drawOrnatePanel } from "./uiFrames.js";
 import { getShotTypeLabel } from "./shotType.js";
 import { getTokenIconKey } from "./IconRegistry.js";
 import { FONTS, textStyle, UI_COLORS, UI_DEPTH } from "./uiTheme.js";
-
-const COMBAT_PHASES = new Set(["combat", "boss"]);
-const SHOP_PHASES = new Set(["shop", "initialShop"]);
-
-const SHOP_LAYOUT = {
-  panelX: 155,
-  panelY: 248,
-  panelW: 970,
-  panelH: 290,
-  tabY: 252,
-  tabH: 38,
-  tabW: 270,
-  tabTokensX: 310,
-  tabPassivesX: 690,
-  cardY: 300,
-  cardW: 260,
-  cardH: 210,
-  cardStartX: 220,
-  cardStep: 295,
-  cardPadding: 16,
-  iconSize: 36,
-  iconGap: 10
-};
-
-function shopCardLeft(index) {
-  return SHOP_LAYOUT.cardStartX + index * SHOP_LAYOUT.cardStep;
-}
-
-function shopCardRight(index) {
-  return shopCardLeft(index) + SHOP_LAYOUT.cardW;
-}
-
-function shopCardInnerWidth() {
-  return SHOP_LAYOUT.cardW - SHOP_LAYOUT.cardPadding * 2;
-}
-
-function shopTabCenter(tabX) {
-  return tabX + SHOP_LAYOUT.tabW / 2;
-}
 
 function addIcon(scene, x, y, textureKey, size = 20) {
   if (!scene.textures.exists(textureKey)) {
@@ -60,6 +55,9 @@ function addIcon(scene, x, y, textureKey, size = 20) {
 function setVisible(obj, visible) {
   if (obj) obj.setVisible(visible);
 }
+
+const COMBAT_PHASES = new Set(["combat", "boss"]);
+const SHOP_PHASES = new Set(["shop", "initialShop"]);
 
 export class UIManager {
   constructor(scene) {
@@ -213,108 +211,228 @@ export class UIManager {
   }
 
   createReelConfigPanel(scene) {
-    this.reelPanelTitle = scene.add.text(24, 68, "TUS RULETAS · VACÍO = +3 BALAS", textStyle("15px", UI_COLORS.textPale, FONTS.display))
-      .setDepth(UI_DEPTH.shop);
+    this.reelPanelTitle = scene.add.text(0, 0, "TUS RULETAS · VACÍO = +3 BALAS", {
+      ...textStyle("15px", UI_COLORS.textPale, FONTS.display),
+      align: "center"
+    }).setOrigin(0.5, 0).setDepth(UI_DEPTH.shop);
 
-    this.reelRowLabels = [];
+    this.reelBlockLabels = [];
+    this.reelSlotIcons = [];
     this.reelSlotTexts = [];
 
     for (let r = 0; r < REEL_COUNT; r++) {
-      this.reelRowLabels.push(
-        scene.add.text(24, 98 + r * 34, "R" + (r + 1), textStyle("15px", UI_COLORS.textPale))
+      this.reelBlockLabels.push(
+        scene.add.text(0, 0, "RULETA " + (r + 1), textStyle("14px", UI_COLORS.textPale, FONTS.display))
           .setDepth(UI_DEPTH.shop)
       );
 
-      const rowSlots = [];
+      const rowIcons = [];
+      const rowTexts = [];
 
       for (let s = 0; s < SLOTS_PER_REEL; s++) {
-        rowSlots.push(
-          scene.add.text(68 + s * 78, 98 + r * 34, "□", {
-            ...textStyle("17px", "#b8b8b8"),
-            align: "center",
-            fixedWidth: 56
-          }).setOrigin(0.5, 0).setDepth(UI_DEPTH.shop)
+        rowIcons.push(addIcon(scene, 0, 0, "icon_empty", 24));
+        rowTexts.push(
+          scene.add.text(0, 0, "□", {
+            ...textStyle("16px", "#b8b8b8"),
+            align: "center"
+          }).setOrigin(0.5).setDepth(UI_DEPTH.shop)
         );
       }
 
-      this.reelSlotTexts.push(rowSlots);
+      this.reelSlotIcons.push(rowIcons);
+      this.reelSlotTexts.push(rowTexts);
     }
 
-    this.reelCollapseHint = scene.add.text(24, 68, "[Q] expandir ruletas", textStyle("13px", "#666666"))
-      .setDepth(UI_DEPTH.text).setVisible(false);
+    this.reelCollapseHint = scene.add.text(0, 0, "[Q] expandir ruletas", {
+      ...textStyle("13px", "#666666"),
+      align: "center"
+    }).setOrigin(0.5, 0).setDepth(UI_DEPTH.text).setVisible(false);
+  }
+
+  syncReelPanelLayout(collapsed) {
+    const titleY = getReelTitleY(collapsed);
+    const titleX = REEL_LAYOUT.panelX + REEL_LAYOUT.panelW / 2;
+
+    this.reelPanelTitle.setPosition(titleX, titleY);
+    this.reelCollapseHint.setPosition(titleX, titleY);
+
+    for (let r = 0; r < REEL_COUNT; r++) {
+      const block = getReelBlockBounds(r, collapsed);
+      this.reelBlockLabels[r].setPosition(block.x + 10, block.y + 4);
+
+      for (let s = 0; s < SLOTS_PER_REEL; s++) {
+        const bounds = getReelSlotBounds(r, s, collapsed);
+        const icon = this.reelSlotIcons[r][s];
+        const text = this.reelSlotTexts[r][s];
+
+        if (icon) {
+          icon.setPosition(bounds.centerX, bounds.centerY);
+        }
+        text.setPosition(bounds.centerX, bounds.centerY);
+      }
+    }
+  }
+
+  isReelPanelCollapsed() {
+    const scene = this.scene;
+    const inCombat = COMBAT_PHASES.has(scene.phase);
+    const inShop = SHOP_PHASES.has(scene.phase);
+    const showShop = inShop || scene.placingToken;
+
+    return inCombat && !showShop && this.reelsCollapsed;
   }
 
   createShopPanel(scene) {
-    this.shopTitle = scene.add.text(GAME_WIDTH / 2, 128, "", {
+    this.shopTitle = scene.add.text(0, 0, "", {
       ...textStyle("20px", UI_COLORS.textPale, FONTS.display),
       align: "center",
-      wordWrap: { width: 900 }
-    }).setOrigin(0.5, 0).setDepth(UI_DEPTH.shop);
+      wordWrap: { width: 560 }
+    }).setOrigin(0.5).setDepth(UI_DEPTH.shop);
 
-    this.shopPlacementHint = scene.add.text(GAME_WIDTH / 2, 220, "", {
-      ...textStyle("24px", UI_COLORS.textPale),
+    this.shopPlacementHint = scene.add.text(0, 0, "", {
+      ...textStyle("20px", UI_COLORS.textPale),
       align: "center",
-      wordWrap: { width: 700 }
-    }).setOrigin(0.5, 0).setDepth(UI_DEPTH.shop).setVisible(false);
+      wordWrap: { width: 560 }
+    }).setOrigin(0.5).setDepth(UI_DEPTH.shop).setVisible(false);
 
-    this.tabTokens = scene.add.text(
-      shopTabCenter(SHOP_LAYOUT.tabTokensX),
-      SHOP_LAYOUT.tabY + SHOP_LAYOUT.tabH / 2,
+    this.shopTokensLabel = scene.add.text(
+      SHOP_LAYOUT.panelX + 16,
+      SHOP_LAYOUT.tokensLabelY,
       "TOKENS DE RULETA",
-      textStyle("17px", UI_COLORS.textPale, FONTS.display)
-    ).setOrigin(0.5).setDepth(UI_DEPTH.shop);
+      textStyle("15px", UI_COLORS.textPale, FONTS.display)
+    ).setDepth(UI_DEPTH.shop);
 
-    this.tabPassives = scene.add.text(
-      shopTabCenter(SHOP_LAYOUT.tabPassivesX),
-      SHOP_LAYOUT.tabY + SHOP_LAYOUT.tabH / 2,
+    this.shopPassivesLabel = scene.add.text(
+      SHOP_LAYOUT.panelX + 16,
+      SHOP_LAYOUT.passivesLabelY,
       "PASIVAS",
-      textStyle("17px", UI_COLORS.textPale, FONTS.display)
-    ).setOrigin(0.5).setDepth(UI_DEPTH.shop);
+      textStyle("15px", UI_COLORS.textPale, FONTS.display)
+    ).setDepth(UI_DEPTH.shop);
 
-    this.shopCards = [];
+    this.tokenTiles = [];
 
-    for (let i = 0; i < 3; i++) {
-      const left = shopCardLeft(i);
-      const right = shopCardRight(i);
-      const pad = SHOP_LAYOUT.cardPadding;
-      const innerW = shopCardInnerWidth();
-      const iconSize = SHOP_LAYOUT.iconSize;
-      const headerY = SHOP_LAYOUT.cardY + pad;
-      const iconX = left + pad + iconSize / 2;
-      const iconY = headerY + iconSize / 2;
-      const titleX = left + pad + iconSize + SHOP_LAYOUT.iconGap;
-      const titleW = innerW - iconSize - SHOP_LAYOUT.iconGap;
-      const descY = headerY + iconSize + 12;
-      const priceY = SHOP_LAYOUT.cardY + SHOP_LAYOUT.cardH - pad;
-
-      this.shopCards.push({
-        left,
-        right,
-        symbol: addIcon(scene, iconX, iconY, "icon_passive", iconSize),
-        symbolText: scene.add.text(iconX, iconY, "?", {
-          ...textStyle("28px", UI_COLORS.textGold, FONTS.impact),
+    for (let i = 0; i < TOKEN_OFFER_COUNT; i++) {
+      const bounds = getTokenTileBounds(i);
+      this.tokenTiles.push({
+        bounds,
+        icon: addIcon(scene, bounds.centerX, bounds.centerY - 10, "icon_passive", 32),
+        symbolText: scene.add.text(bounds.centerX, bounds.centerY - 10, "?", {
+          ...textStyle("24px", UI_COLORS.textGold, FONTS.impact),
           align: "center"
         }).setOrigin(0.5).setDepth(UI_DEPTH.shop).setVisible(false),
+        priceIcon: addIcon(scene, bounds.centerX + 14, bounds.centerY + 22, "icon_coins", 14),
+        price: scene.add.text(bounds.centerX, bounds.centerY + 22, "", {
+          ...textStyle("15px", UI_COLORS.textGold, FONTS.display),
+          align: "center"
+        }).setOrigin(0.5).setDepth(UI_DEPTH.shop)
+      });
+    }
+
+    this.passiveCards = [];
+
+    for (let i = 0; i < PASSIVE_OFFER_COUNT; i++) {
+      const cardBounds = getPassiveCardBounds(i);
+      const pad = SHOP_LAYOUT.passiveCardPadding;
+      const innerW = cardBounds.w - pad * 2;
+      const iconSize = SHOP_LAYOUT.passiveIconSize;
+      const headerY = cardBounds.y + pad;
+      const iconX = cardBounds.x + pad + iconSize / 2;
+      const iconY = headerY + iconSize / 2;
+      const titleX = cardBounds.x + pad + iconSize + 8;
+      const titleW = innerW - iconSize - 8;
+      const descY = headerY + iconSize + 10;
+      const priceY = cardBounds.y + cardBounds.h - pad;
+
+      this.passiveCards.push({
+        bounds: cardBounds,
+        blocked: scene.add.text(cardBounds.centerX, cardBounds.centerY, "BLOQUEADO", {
+          ...textStyle("20px", "#666666", FONTS.display),
+          align: "center"
+        }).setOrigin(0.5).setDepth(UI_DEPTH.shop).setVisible(false),
+        symbol: addIcon(scene, iconX, iconY, "icon_passive", iconSize),
         title: scene.add.text(titleX, headerY, "", {
-          ...textStyle("18px", UI_COLORS.textPale, FONTS.display),
+          ...textStyle("16px", UI_COLORS.textPale, FONTS.display),
           align: "left",
           fixedWidth: titleW,
           wordWrap: { width: titleW, useAdvancedWrap: true }
         }).setOrigin(0, 0).setDepth(UI_DEPTH.shop),
-        desc: scene.add.text(left + pad, descY, "", {
-          ...textStyle("14px", "#c8b890"),
+        desc: scene.add.text(cardBounds.x + pad, descY, "", {
+          ...textStyle("13px", "#c8b890"),
           align: "left",
           fixedWidth: innerW,
           wordWrap: { width: innerW, useAdvancedWrap: true }
         }).setOrigin(0, 0).setDepth(UI_DEPTH.shop),
-        priceIcon: addIcon(scene, right - pad, priceY, "icon_coins", 16)
+        priceIcon: addIcon(scene, cardBounds.x + cardBounds.w - pad, priceY, "icon_coins", 14)
           .setOrigin(1, 1),
-        price: scene.add.text(right - pad, priceY, "", {
-          ...textStyle("18px", UI_COLORS.textGold, FONTS.display),
+        price: scene.add.text(cardBounds.x + cardBounds.w - pad, priceY, "", {
+          ...textStyle("16px", UI_COLORS.textGold, FONTS.display),
           align: "right"
         }).setOrigin(1, 1).setDepth(UI_DEPTH.shop)
       });
     }
+
+    this.shopTooltipG = scene.add.graphics().setDepth(UI_DEPTH.popup).setVisible(false);
+    const tooltipDepth = UI_DEPTH.popup + 1;
+    this.shopTooltipTitle = scene.add.text(0, 0, "", textStyle("15px", UI_COLORS.textPale, FONTS.display))
+      .setDepth(tooltipDepth).setVisible(false);
+    this.shopTooltipDesc = scene.add.text(0, 0, "", {
+      ...textStyle("12px", "#c8b890"),
+      wordWrap: { width: SHOP_LAYOUT.tooltipW - 24, useAdvancedWrap: true }
+    }).setDepth(tooltipDepth).setVisible(false);
+    this.shopTooltipPrice = scene.add.text(0, 0, "", textStyle("14px", UI_COLORS.textGold, FONTS.display))
+      .setDepth(tooltipDepth).setVisible(false);
+    this.shopTooltipIcon = addIcon(scene, 0, 0, "icon_passive", 26);
+    if (this.shopTooltipIcon) {
+      this.shopTooltipIcon.setDepth(tooltipDepth);
+    }
+
+    const rerollBounds = getRerollButtonBounds();
+    const continueBounds = getContinueButtonBounds();
+
+    this.rerollBtnText = scene.add.text(
+      rerollBounds.centerX,
+      rerollBounds.centerY,
+      "REROLL",
+      textStyle("15px", UI_COLORS.textPale, FONTS.display)
+    ).setOrigin(0.5).setDepth(UI_DEPTH.shop);
+
+    this.continueBtnText = scene.add.text(
+      continueBounds.centerX,
+      continueBounds.centerY,
+      "CONTINUAR",
+      textStyle("15px", UI_COLORS.textPale, FONTS.display)
+    ).setOrigin(0.5).setDepth(UI_DEPTH.shop);
+
+    const chipsBar = getChipsBarBounds();
+    this.shopChipsIcon = addIcon(scene, 0, 0, "icon_coins", 22);
+    this.shopChipsValue = scene.add.text(0, 0, "", {
+      ...textStyle("28px", "#d81414", FONTS.impact),
+      align: "left"
+    }).setOrigin(0, 0.5).setDepth(UI_DEPTH.shop);
+    this.shopChipsLabel = scene.add.text(0, 0, "FICHAS", {
+      ...textStyle("13px", "#888888"),
+      align: "left"
+    }).setOrigin(0, 0.5).setDepth(UI_DEPTH.shop);
+
+    this.layoutShopHeader();
+  }
+
+  layoutShopHeader() {
+    const chipsBar = getChipsBarBounds();
+    const titleX = SHOP_LAYOUT.panelX + SHOP_LAYOUT.panelW / 2;
+    const titleY = getShopTitleY();
+    const pad = 14;
+    const cy = chipsBar.centerY;
+
+    if (this.shopChipsIcon) {
+      this.shopChipsIcon.setPosition(chipsBar.x + pad + 11, cy);
+    }
+
+    this.shopChipsValue.setPosition(chipsBar.x + pad + 30, cy);
+    this.shopChipsLabel.setPosition(chipsBar.x + pad + 30, cy + 16);
+
+    this.shopTitle.setPosition(titleX, titleY);
+    this.shopPlacementHint.setPosition(titleX, titleY);
   }
 
   createHintBar(scene) {
@@ -394,6 +512,7 @@ export class UIManager {
   updateVisibility(inCombat, inShop, isEnd) {
     const showCombat = inCombat && !isEnd;
     const showShop = inShop || this.scene.placingToken;
+    const showShopPanel = showShop && !this.scene.placingToken;
     const showReelsExpanded = showShop || this.scene.placingToken || (inCombat && !this.reelsCollapsed);
 
     for (const slot of this.combatReelSlots) {
@@ -412,41 +531,64 @@ export class UIManager {
     this.dashLabel.setVisible(showCombat);
     this.dashKey.setVisible(showCombat);
 
-    setVisible(this.scoreIcon, !isEnd);
-    this.scoreValue.setVisible(!isEnd);
-    this.scoreLabel.setVisible(!isEnd);
-    setVisible(this.comboIcon, !isEnd);
-    this.comboStatValue.setVisible(!isEnd);
-    this.comboStatLabel.setVisible(!isEnd);
-    setVisible(this.chipsIcon, !isEnd);
-    this.chipsValue.setVisible(!isEnd);
-    this.chipsLabel.setVisible(!isEnd);
+    setVisible(this.scoreIcon, !isEnd && !showShop);
+    this.scoreValue.setVisible(!isEnd && !showShop);
+    this.scoreLabel.setVisible(!isEnd && !showShop);
+    setVisible(this.comboIcon, !isEnd && !showShop);
+    this.comboStatValue.setVisible(!isEnd && !showShop);
+    this.comboStatLabel.setVisible(!isEnd && !showShop);
+    setVisible(this.chipsIcon, !isEnd && !showShop);
+    this.chipsValue.setVisible(!isEnd && !showShop);
+    this.chipsLabel.setVisible(!isEnd && !showShop);
 
-    this.shopTitle.setVisible(showShop && !this.scene.placingToken);
+    setVisible(this.shopChipsIcon, showShopPanel);
+    this.shopChipsValue.setVisible(showShopPanel);
+    this.shopChipsLabel.setVisible(showShopPanel);
+
+    this.shopTitle.setVisible(showShopPanel);
     this.shopPlacementHint.setVisible(showShop && !!this.scene.placingToken);
-    this.tabTokens.setVisible(showShop && !this.scene.placingToken);
-    this.tabPassives.setVisible(showShop && !this.scene.placingToken);
+    this.shopTokensLabel.setVisible(showShopPanel);
+    this.shopPassivesLabel.setVisible(showShopPanel);
 
-    for (const card of this.shopCards) {
-      const visible = showShop && !this.scene.placingToken;
+    for (const tile of this.tokenTiles) {
+      const visible = showShopPanel;
+      setVisible(tile.icon, visible);
+      if (tile.symbolText) tile.symbolText.setVisible(visible && !tile.icon);
+      tile.price.setVisible(visible);
+      setVisible(tile.priceIcon, visible);
+    }
+
+    this.rerollBtnText.setVisible(showShopPanel);
+    this.continueBtnText.setVisible(showShopPanel);
+
+    for (const card of this.passiveCards) {
+      const visible = showShopPanel;
+      card.blocked.setVisible(visible);
       setVisible(card.symbol, visible);
-      if (card.symbolText) card.symbolText.setVisible(visible && !card.symbol);
       card.title.setVisible(visible);
       card.desc.setVisible(visible);
       card.price.setVisible(visible);
       setVisible(card.priceIcon, visible);
     }
 
+    const showTooltip = this.shouldShowTokenTooltip(showShop);
+    this.shopTooltipG.setVisible(showTooltip);
+    this.shopTooltipTitle.setVisible(showTooltip);
+    this.shopTooltipDesc.setVisible(showTooltip);
+    this.shopTooltipPrice.setVisible(showTooltip);
+    setVisible(this.shopTooltipIcon, showTooltip);
+
     this.reelPanelTitle.setVisible(showReelsExpanded);
     this.reelCollapseHint.setVisible(inCombat && this.reelsCollapsed);
 
-    for (const label of this.reelRowLabels) {
+    for (const label of this.reelBlockLabels) {
       label.setVisible(showReelsExpanded);
     }
 
-    for (const row of this.reelSlotTexts) {
-      for (const slot of row) {
-        slot.setVisible(showReelsExpanded);
+    for (let r = 0; r < REEL_COUNT; r++) {
+      for (let s = 0; s < SLOTS_PER_REEL; s++) {
+        setVisible(this.reelSlotIcons[r][s], showReelsExpanded);
+        this.reelSlotTexts[r][s].setVisible(showReelsExpanded);
       }
     }
 
@@ -525,28 +667,47 @@ export class UIManager {
   }
 
   drawReelConfig(scene, g, expanded) {
-    const x = 14;
-    const y = expanded ? 58 : 58;
-    const h = expanded ? 148 : 40;
+    const collapsed = !expanded && this.reelsCollapsed;
+    const panelY = getReelPanelY(collapsed);
+    const panelH = getReelPanelHeight(collapsed);
 
-    drawOrnatePanel(g, x, y, 580, h, { fillAlpha: expanded ? 0.82 : 0.65 });
+    drawOrnatePanel(g, REEL_LAYOUT.panelX, panelY, REEL_LAYOUT.panelW, panelH, {
+      fillAlpha: expanded ? 0.88 : 0.65
+    });
 
-    if (!expanded && this.reelsCollapsed) return;
+    if (collapsed) return;
+
+    this.syncReelPanelLayout(collapsed);
+
+    const hover = scene.reelHoverSlot;
 
     for (let r = 0; r < REEL_COUNT; r++) {
+      const block = getReelBlockBounds(r, collapsed);
+      const activeReel = scene.placingToken && r === scene.placeReelIndex;
+
+      drawOrnatePanel(g, block.x, block.y, block.w, block.h, {
+        fill: activeReel ? 0x2a1008 : 0x120806,
+        fillAlpha: 0.95,
+        border: activeReel ? COLORS.paleGold : COLORS.gold
+      });
+
       for (let s = 0; s < SLOTS_PER_REEL; s++) {
-        const px = 52 + s * 78;
-        const py = 94 + r * 34;
+        const bounds = getReelSlotBounds(r, s, collapsed);
         const tokenKey = scene.reels[r][s];
         const selected =
           scene.placingToken &&
           r === scene.placeReelIndex &&
           s === scene.placeSlotIndex;
+        const hovered =
+          hover &&
+          hover.reelIndex === r &&
+          hover.slotIndex === s &&
+          tokenKey;
 
         g.fillStyle(tokenKey ? TOKENS[tokenKey].color : 0x141414, tokenKey ? 0.9 : 0.75);
-        g.fillRoundedRect(px - 28, py, 56, 26, 4);
-        g.lineStyle(2, selected ? 0xffffff : COLORS.gold, selected ? 1 : 0.55);
-        g.strokeRoundedRect(px - 28, py, 56, 26, 4);
+        g.fillRoundedRect(bounds.x, bounds.y, bounds.w, bounds.h, 4);
+        g.lineStyle(2, selected || hovered ? 0xffffff : COLORS.gold, selected || hovered ? 1 : 0.55);
+        g.strokeRoundedRect(bounds.x, bounds.y, bounds.w, bounds.h, 4);
       }
     }
   }
@@ -560,30 +721,54 @@ export class UIManager {
 
     if (scene.placingToken) return;
 
+    const chipsBar = getChipsBarBounds();
+    drawOrnatePanel(g, chipsBar.x, chipsBar.y, chipsBar.w, chipsBar.h, {
+      fill: UI_COLORS.panelFillShop,
+      fillAlpha: 0.96
+    });
+
     drawOrnatePanel(g, SHOP_LAYOUT.panelX, SHOP_LAYOUT.panelY, SHOP_LAYOUT.panelW, SHOP_LAYOUT.panelH, {
       fill: UI_COLORS.panelFillShop,
       fillAlpha: 0.96
     });
 
-    const tokenSelected = scene.shopSection === "tokens";
-    drawOrnatePanel(g, SHOP_LAYOUT.tabTokensX, SHOP_LAYOUT.tabY, SHOP_LAYOUT.tabW, SHOP_LAYOUT.tabH, {
-      fill: tokenSelected ? 0x5a1505 : 0x120806,
-      fillAlpha: 1
-    });
-    drawOrnatePanel(g, SHOP_LAYOUT.tabPassivesX, SHOP_LAYOUT.tabY, SHOP_LAYOUT.tabW, SHOP_LAYOUT.tabH, {
-      fill: !tokenSelected ? 0x5a1505 : 0x120806,
-      fillAlpha: 1
-    });
+    for (let i = 0; i < TOKEN_OFFER_COUNT; i++) {
+      const bounds = getTokenTileBounds(i);
+      const hovered = scene.shopHoverToken === i;
 
-    for (let i = 0; i < 3; i++) {
-      const x = SHOP_LAYOUT.cardStartX + i * SHOP_LAYOUT.cardStep;
-      const selected = i === scene.shopSelection;
-      drawOrnatePanel(g, x, SHOP_LAYOUT.cardY, SHOP_LAYOUT.cardW, SHOP_LAYOUT.cardH, {
-        fill: selected ? 0x441000 : 0x1a0a08,
+      drawOrnatePanel(g, bounds.x, bounds.y, bounds.w, bounds.h, {
+        fill: hovered ? 0x441000 : 0x1a0a08,
         fillAlpha: 1,
-        border: selected ? COLORS.paleGold : COLORS.gold
+        border: hovered ? COLORS.paleGold : COLORS.gold
       });
     }
+
+    for (let i = 0; i < PASSIVE_OFFER_COUNT; i++) {
+      const bounds = getPassiveCardBounds(i);
+      const hovered = scene.shopHoverPassive === i;
+      const blocked = scene.phase === "initialShop";
+
+      drawOrnatePanel(g, bounds.x, bounds.y, bounds.w, bounds.h, {
+        fill: blocked ? 0x0e0606 : hovered ? 0x441000 : 0x1a0a08,
+        fillAlpha: 1,
+        border: blocked ? 0x443322 : hovered ? COLORS.paleGold : COLORS.gold
+      });
+    }
+
+    const rerollBounds = getRerollButtonBounds();
+    const continueBounds = getContinueButtonBounds();
+
+    drawOrnatePanel(g, rerollBounds.x, rerollBounds.y, rerollBounds.w, rerollBounds.h, {
+      fill: scene.shopHoverReroll ? 0x441000 : 0x1a0a08,
+      fillAlpha: 1,
+      border: scene.shopHoverReroll ? COLORS.paleGold : COLORS.gold
+    });
+
+    drawOrnatePanel(g, continueBounds.x, continueBounds.y, continueBounds.w, continueBounds.h, {
+      fill: scene.shopHoverContinue ? 0x441000 : 0x5a1505,
+      fillAlpha: 1,
+      border: scene.shopHoverContinue ? COLORS.paleGold : COLORS.gold
+    });
   }
 
   drawEndOverlay(scene, g) {
@@ -649,6 +834,7 @@ export class UIManager {
     this.scoreValue.setText(scene.score.toLocaleString("es-AR"));
     this.comboStatValue.setText("x" + Math.floor(scene.combo));
     this.chipsValue.setText(scene.chips.toLocaleString("es-AR"));
+    this.shopChipsValue.setText(scene.chips.toLocaleString("es-AR"));
 
     if (isEnd) {
       if (scene.phase === "win") {
@@ -662,34 +848,83 @@ export class UIManager {
       }
     }
 
-    this.reelPanelTitle.setY(this.reelsCollapsed && inCombat ? 68 : 68);
     this.reelPanelTitle.setText(
       inCombat && this.reelsCollapsed
         ? "RULETAS (Q expandir)"
         : "TUS RULETAS · VACÍO = +3 BALAS"
     );
 
+    this.syncReelPanelLayout(this.isReelPanelCollapsed());
+
     for (let r = 0; r < REEL_COUNT; r++) {
       for (let s = 0; s < SLOTS_PER_REEL; s++) {
         const tokenKey = scene.reels[r][s];
+        const icon = this.reelSlotIcons[r][s];
         const text = this.reelSlotTexts[r][s];
-        text.setText(tokenKey ? TOKENS[tokenKey].label : "□");
-        text.setColor(tokenKey ? "#ffe0a0" : "#888888");
+
+        if (tokenKey && icon) {
+          icon.setTexture(getTokenIconKey(tokenKey)).setVisible(true);
+          text.setVisible(false);
+        } else if (tokenKey) {
+          text.setVisible(true);
+          text.setText(TOKENS[tokenKey].label);
+          text.setColor("#ffe0a0");
+          setVisible(icon, false);
+        } else {
+          if (icon) {
+            icon.setTexture("icon_empty").setVisible(true);
+            text.setVisible(false);
+          } else {
+            text.setVisible(true);
+            text.setText("□");
+            text.setColor("#888888");
+          }
+        }
       }
     }
 
     if (inShop || scene.placingToken) {
       this.updateShopTexts(scene, inShop);
+    } else {
+      scene.shopHoverToken = -1;
+      scene.shopHoverPassive = -1;
+      scene.shopHoverReroll = false;
+      scene.shopHoverContinue = false;
     }
 
+    this.updateHoverTooltip(scene);
+
     this.hintText.setText(this.getHintForPhase(scene));
+  }
+
+  isReelsExpanded() {
+    const scene = this.scene;
+    const inShop = SHOP_PHASES.has(scene.phase);
+    const inCombat = COMBAT_PHASES.has(scene.phase);
+    return inShop || scene.placingToken || (inCombat && !this.reelsCollapsed);
+  }
+
+  shouldShowTokenTooltip(showShop) {
+    const scene = this.scene;
+
+    if (showShop && !scene.placingToken && getTooltipTokenIndex(scene) >= 0) {
+      return true;
+    }
+
+    if (!this.isReelsExpanded() || !scene.reelHoverSlot) {
+      return false;
+    }
+
+    const { reelIndex, slotIndex } = scene.reelHoverSlot;
+    return !!scene.reels[reelIndex][slotIndex];
   }
 
   updateShopTexts(scene, inShop) {
     if (scene.placingToken) {
       this.shopPlacementHint.setText(
-        "Elegí un slot en cualquiera de tus 3 ruletas.\nFlechas mover · E colocar · Podés reemplazar tokens anteriores."
+        "Click en un slot de tus ruletas para colocar el token.\nPodés reemplazar tokens anteriores."
       );
+      this.layoutShopHeader();
       return;
     }
 
@@ -702,90 +937,290 @@ export class UIManager {
     }
 
     this.shopTitle.setText(title);
+    this.layoutShopHeader();
 
-    this.tabTokens.setColor(scene.shopSection === "tokens" ? UI_COLORS.textPale : "#666666");
-    this.tabPassives.setColor(scene.shopSection === "passives" ? UI_COLORS.textPale : "#666666");
+    if (scene.phase === "initialShop") {
+      this.rerollBtnText.setText("REROLL GRATIS");
+      this.continueBtnText.setText("EMPEZAR RUN");
+    } else {
+      this.rerollBtnText.setText("REROLL · " + SHOP_REROLL_COST);
+      this.continueBtnText.setText("CONTINUAR");
+    }
 
-    const offers = getCurrentOffers(scene);
-
-    for (let i = 0; i < 3; i++) {
-      const card = this.shopCards[i];
-      const offer = offers[i];
+    for (let i = 0; i < TOKEN_OFFER_COUNT; i++) {
+      const tile = this.tokenTiles[i];
+      const offer = scene.tokenOffers[i];
+      const bounds = getTokenTileBounds(i);
 
       if (!offer) {
+        setVisible(tile.icon, false);
+        if (tile.symbolText) tile.symbolText.setVisible(false);
+        tile.price.setVisible(false);
+        setVisible(tile.priceIcon, false);
+        continue;
+      }
+
+      tile.icon.setPosition(bounds.centerX, bounds.centerY - 10);
+      tile.price.setPosition(bounds.centerX, bounds.centerY + 22);
+
+      if (tile.icon) {
+        tile.icon.setTexture(getTokenIconKey(offer.key)).setVisible(true);
+      } else if (tile.symbolText) {
+        tile.symbolText.setVisible(true);
+        tile.symbolText.setText(TOKENS[offer.key].label);
+      }
+
+      const canAfford =
+        scene.phase === "initialShop" || scene.chips >= offer.cost;
+
+      if (scene.phase === "initialShop") {
+        tile.price.setText("GRATIS");
+        tile.price.setColor(UI_COLORS.textPale);
+        setVisible(tile.priceIcon, false);
+      } else {
+        tile.price.setText(String(offer.cost));
+        tile.price.setColor(canAfford ? UI_COLORS.textGold : UI_COLORS.textRed);
+        setVisible(tile.priceIcon, true);
+        if (tile.priceIcon) {
+          tile.priceIcon.setPosition(bounds.centerX + tile.price.width / 2 + 10, bounds.centerY + 22);
+        }
+      }
+    }
+
+    const blocked = scene.phase === "initialShop";
+
+    for (let i = 0; i < PASSIVE_OFFER_COUNT; i++) {
+      const card = this.passiveCards[i];
+      const offer = scene.passiveOffers[i];
+
+      if (blocked) {
+        card.blocked.setVisible(true);
         setVisible(card.symbol, false);
-        if (card.symbolText) card.symbolText.setVisible(false);
         card.title.setVisible(false);
         card.desc.setVisible(false);
         card.price.setVisible(false);
         setVisible(card.priceIcon, false);
-        continue;
-      }
-
-      setVisible(card.symbol, true);
-      if (card.symbolText) card.symbolText.setVisible(false);
-      card.title.setVisible(true);
-      card.desc.setVisible(true);
-      card.price.setVisible(true);
-
-      if (offer.type === "token") {
-        if (card.symbol) {
-          card.symbol.setTexture(getTokenIconKey(offer.key));
-        } else if (card.symbolText) {
-          card.symbolText.setVisible(true);
-          card.symbolText.setText(TOKENS[offer.key].label);
-        }
-        card.title.setText(offer.name);
-      } else {
-        if (card.symbol) {
-          card.symbol.setTexture("icon_passive");
-        } else if (card.symbolText) {
-          card.symbolText.setVisible(true);
-          card.symbolText.setText("✦");
-        }
-        card.title.setText(offer.name);
-      }
-
-      card.desc.setText(offer.description);
-
-      const canAfford = scene.phase === "initialShop" && offer.type === "token"
-        ? true
-        : scene.chips >= offer.cost;
-
-      if (scene.phase === "initialShop" && offer.type === "token") {
-        card.price.setText("GRATIS");
-        card.price.setColor(UI_COLORS.textPale);
+      } else if (!offer) {
+        card.blocked.setVisible(false);
+        setVisible(card.symbol, false);
+        card.title.setVisible(false);
+        card.desc.setVisible(false);
+        card.price.setVisible(false);
         setVisible(card.priceIcon, false);
       } else {
+        card.blocked.setVisible(false);
+        setVisible(card.symbol, true);
+        card.title.setVisible(true);
+        card.desc.setVisible(true);
+        card.price.setVisible(true);
+
+        card.title.setText(offer.name);
+        card.desc.setText(offer.description);
+
+        const canAfford = scene.chips >= offer.cost;
         card.price.setText(String(offer.cost));
         card.price.setColor(canAfford ? UI_COLORS.textGold : UI_COLORS.textRed);
         setVisible(card.priceIcon, true);
-        this.layoutShopCardPrice(card);
+        this.layoutPassiveCardPrice(card);
       }
     }
   }
 
-  layoutShopCardPrice(card) {
-    const pad = SHOP_LAYOUT.cardPadding;
-    const priceY = SHOP_LAYOUT.cardY + SHOP_LAYOUT.cardH - pad;
+  hideTokenTooltip() {
+    this.shopTooltipG.clear();
+  }
 
-    card.price.setPosition(card.right - pad, priceY);
+  showTokenTooltip(anchorBounds, tokenKey, description, footerText) {
+    const token = TOKENS[tokenKey];
+    if (!token) {
+      this.hideTokenTooltip();
+      return;
+    }
+
+    const pos = getTooltipPosition(anchorBounds);
+
+    this.shopTooltipG.clear();
+    drawOrnatePanel(this.shopTooltipG, pos.x, pos.y, pos.w, pos.h, {
+      fill: 0x1a0a08,
+      fillAlpha: 0.98,
+      border: COLORS.paleGold
+    });
+
+    const pad = 12;
+    const iconSize = 26;
+    const headerY = pos.y + pad + 14;
+
+    if (this.shopTooltipIcon) {
+      this.shopTooltipIcon
+        .setTexture(getTokenIconKey(tokenKey))
+        .setDisplaySize(iconSize, iconSize)
+        .setPosition(pos.x + pad + iconSize / 2, headerY)
+        .setVisible(true);
+    }
+
+    this.shopTooltipTitle.setText(token.name);
+    this.shopTooltipTitle.setOrigin(0, 0.5);
+    this.shopTooltipTitle.setPosition(pos.x + pad + iconSize + 8, headerY);
+
+    this.shopTooltipDesc.setText(description);
+    this.shopTooltipDesc.setOrigin(0, 0);
+    this.shopTooltipDesc.setPosition(pos.x + pad, pos.y + 40);
+
+    this.shopTooltipPrice.setText(footerText);
+    this.shopTooltipPrice.setOrigin(1, 1);
+    this.shopTooltipPrice.setPosition(pos.x + pos.w - pad, pos.y + pos.h - pad);
+  }
+
+  updateHoverTooltip(scene) {
+    const shopIndex = getTooltipTokenIndex(scene);
+    const inShop = SHOP_PHASES.has(scene.phase);
+
+    if (inShop && !scene.placingToken && shopIndex >= 0) {
+      const offer = scene.tokenOffers[shopIndex];
+      if (offer) {
+        const footer =
+          scene.phase === "initialShop" ? "GRATIS" : String(offer.cost) + " fichas";
+        this.showTokenTooltip(
+          getTokenTileBounds(shopIndex),
+          offer.key,
+          offer.description,
+          footer
+        );
+        return;
+      }
+    }
+
+    if (scene.reelHoverSlot && this.isReelsExpanded()) {
+      const { reelIndex, slotIndex } = scene.reelHoverSlot;
+      const tokenKey = scene.reels[reelIndex][slotIndex];
+      if (tokenKey) {
+        this.showTokenTooltip(
+          getReelSlotBounds(reelIndex, slotIndex, this.isReelPanelCollapsed()),
+          tokenKey,
+          TOKENS[tokenKey].shopDescription,
+          TOKENS[tokenKey].short
+        );
+        return;
+      }
+    }
+
+    this.hideTokenTooltip();
+  }
+
+  layoutPassiveCardPrice(card) {
+    const pad = SHOP_LAYOUT.passiveCardPadding;
+    const priceY = card.bounds.y + card.bounds.h - pad;
+
+    card.price.setPosition(card.bounds.x + card.bounds.w - pad, priceY);
 
     if (card.priceIcon) {
       const priceWidth = card.price.width;
-      card.priceIcon.setPosition(card.right - pad - priceWidth - 6, priceY - 2);
+      card.priceIcon.setPosition(card.bounds.x + card.bounds.w - pad - priceWidth - 6, priceY - 2);
+    }
+  }
+
+  handlePointerHover(pointer) {
+    const scene = this.scene;
+    const inShop = SHOP_PHASES.has(scene.phase);
+
+    this.updateReelHover(pointer);
+
+    if (scene.placingToken) {
+      scene.shopHoverToken = -1;
+      scene.shopHoverPassive = -1;
+      scene.shopHoverReroll = false;
+      scene.shopHoverContinue = false;
+
+      const hit = hitTestReelSlot(pointer.x, pointer.y, this.isReelPanelCollapsed());
+      if (hit) {
+        setPlacementCursor(scene, hit.reelIndex, hit.slotIndex);
+      }
+      return;
+    }
+
+    if (!inShop) {
+      scene.shopHoverToken = -1;
+      scene.shopHoverPassive = -1;
+      scene.shopHoverReroll = false;
+      scene.shopHoverContinue = false;
+      return;
+    }
+
+    scene.shopHoverToken = hitTestTokenTile(pointer.x, pointer.y);
+    scene.shopHoverPassive = hitTestPassiveCard(pointer.x, pointer.y);
+    scene.shopHoverReroll = hitTestRerollButton(pointer.x, pointer.y);
+    scene.shopHoverContinue = hitTestContinueButton(pointer.x, pointer.y);
+  }
+
+  updateReelHover(pointer) {
+    const scene = this.scene;
+
+    if (!this.isReelsExpanded()) {
+      scene.reelHoverSlot = null;
+      return;
+    }
+
+    const collapsed = this.isReelPanelCollapsed();
+    const hit = hitTestReelSlot(pointer.x, pointer.y, collapsed);
+    if (hit && scene.reels[hit.reelIndex][hit.slotIndex]) {
+      scene.reelHoverSlot = hit;
+    } else {
+      scene.reelHoverSlot = null;
+    }
+  }
+
+  handleShopHover(pointer) {
+    this.handlePointerHover(pointer);
+  }
+
+  handleShopPointer(pointer) {
+    const scene = this.scene;
+    const inShop = SHOP_PHASES.has(scene.phase);
+
+    if (scene.placingToken) {
+      const hit = hitTestReelSlot(pointer.x, pointer.y, false);
+      if (hit) {
+        setPlacementCursor(scene, hit.reelIndex, hit.slotIndex);
+        placeTokenInSelectedSlot(scene);
+      }
+      return;
+    }
+
+    if (!inShop) return;
+
+    if (hitTestRerollButton(pointer.x, pointer.y)) {
+      rerollShop(scene);
+      return;
+    }
+
+    if (hitTestContinueButton(pointer.x, pointer.y)) {
+      continueShop(scene);
+      return;
+    }
+
+    const tokenIndex = hitTestTokenTile(pointer.x, pointer.y);
+    if (tokenIndex >= 0) {
+      buyTokenOffer(scene, tokenIndex);
+      return;
+    }
+
+    const passiveIndex = hitTestPassiveCard(pointer.x, pointer.y);
+    if (passiveIndex >= 0) {
+      buyPassiveOffer(scene, passiveIndex);
     }
   }
 
   getHintForPhase(scene) {
     if (scene.phase === "dead") return "F reiniciar run";
     if (scene.phase === "win") return "F reiniciar · ganaste la run";
-    if (scene.placingToken) return "Flechas slot/ruleta · E colocar";
+    if (scene.placingToken) {
+      return "Click en un slot de ruleta para colocar el token";
+    }
     if (scene.phase === "initialShop") {
-      return "A/D elegir · E token gratis · F empezar (tras 2 tokens)";
+      return "Mouse · click tokens · reroll · empezar run cuando termines";
     }
     if (scene.phase === "shop") {
-      return "TAB sección · A/D elegir · E comprar · R reroll · F siguiente ronda";
+      return "Mouse · click para comprar · reroll · continuar";
     }
     if (scene.phase === "boss") {
       return "WASD · Mouse apuntar · Click disparar · Shift dash · Q ruletas";

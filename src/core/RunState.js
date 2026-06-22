@@ -49,8 +49,11 @@ export function initRunState(scene) {
 
   scene.boss = null;
 
-  scene.shopSection = "tokens";
-  scene.shopSelection = 0;
+  scene.shopHoverToken = -1;
+  scene.shopHoverPassive = -1;
+  scene.shopHoverReroll = false;
+  scene.shopHoverContinue = false;
+  scene.reelHoverSlot = null;
   scene.tokenOffers = [];
   scene.passiveOffers = [];
   scene.placingToken = null;

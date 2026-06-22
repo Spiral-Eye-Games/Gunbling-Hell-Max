@@ -15,7 +15,7 @@ import { updateEnemies } from "../systems/EnemySystem.js";
 import { updateHazards } from "../systems/HazardSystem.js";
 import { handlePlayerMovement } from "../systems/PlayerSystem.js";
 import { tryShoot, tryShootIfHeld } from "../systems/ShootingSystem.js";
-import { enterShop, generateShopOffers, updateShop } from "../systems/ShopSystem.js";
+import { enterShop, generateShopOffers } from "../systems/ShopSystem.js";
 import { UIManager } from "../ui/UIManager.js";
 
 export class MainScene extends Phaser.Scene {
@@ -37,9 +37,20 @@ export class MainScene extends Phaser.Scene {
     this.objectiveText.setText("TIENDA INICIAL · ELEGÍ 2 TOKENS GRATIS");
     this.shopText.setText("");
 
-    this.input.on("pointerdown", () => {
+    this.input.on("pointerdown", (pointer) => {
       if (this.phase === "combat" || this.phase === "boss") {
         tryShoot(this);
+        return;
+      }
+
+      if (this.phase === "shop" || this.phase === "initialShop" || this.placingToken) {
+        this.ui.handleShopPointer(pointer);
+      }
+    });
+
+    this.input.on("pointermove", (pointer) => {
+      if (this.ui) {
+        this.ui.handlePointerHover(pointer);
       }
     });
   }
@@ -53,8 +64,6 @@ export class MainScene extends Phaser.Scene {
 
     if (this.phase === "combat") {
       this.updateCombat(dt);
-    } else if (this.phase === "shop" || this.phase === "initialShop") {
-      updateShop(this);
     } else if (this.phase === "boss") {
       this.updateBossFight(dt);
     } else if (this.phase === "dead" || this.phase === "win") {
