@@ -8,7 +8,7 @@ func setup(main: Node) -> void:
 	game = main
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = ThemeDB.fallback_font
+	_font = GameFonts.ui_font
 
 
 func _process(_delta: float) -> void:
@@ -61,9 +61,10 @@ func _draw() -> void:
 	for i in st.token_offers.size():
 		var offer: Dictionary = st.token_offers[i]
 		var r := ShopLayout.token_tile_rect(i)
+		var token: Dictionary = GameData.TOKENS[offer.key]
 		var icon_rect := Rect2(r.position.x, r.position.y + 4, r.size.x, r.size.y * 0.52)
 		var price_rect := Rect2(r.position.x, r.position.y + r.size.y * 0.52, r.size.x, r.size.y * 0.44)
-		TokenIcons.draw(self, offer.key, icon_rect, GameColors.TEXT_GOLD)
+		UiDraw.draw_in_rect(self, _font, icon_rect, token.label, 22, GameColors.TEXT_GOLD)
 		var price := "GRATIS" if st.phase == "initialShop" else str(offer.cost)
 		UiDraw.draw_in_rect(self, _font, price_rect, price, 13, GameColors.TEXT_GOLD)
 
@@ -116,7 +117,7 @@ func _draw_token_tooltip(offer: Dictionary, anchor: Rect2) -> void:
 	var name_rect := Rect2(x + 44, y + 10, tw - 56, 24)
 	var desc_rect := Rect2(x + 12, y + 38, tw - 24, 56)
 	var footer_rect := Rect2(x + 12, y + th - 26, tw - 24, 20)
-	TokenIcons.draw(self, offer.key, icon_rect, GameColors.TEXT_GOLD)
+	UiDraw.draw_in_rect(self, _font, icon_rect, token.label, 18, GameColors.TEXT_GOLD)
 	UiDraw.draw_in_rect(self, _font, name_rect, offer.name, 14, GameColors.TEXT_PALE, HORIZONTAL_ALIGNMENT_LEFT)
 	UiDraw.draw_in_rect(self, _font, desc_rect, offer.description, 11, Color("#c8b890"), HORIZONTAL_ALIGNMENT_LEFT)
 	var footer := "GRATIS" if game.state.phase == "initialShop" else "%d fichas" % offer.cost

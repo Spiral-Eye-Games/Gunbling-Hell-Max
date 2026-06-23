@@ -8,7 +8,7 @@ func setup(main: Node) -> void:
 	game = main
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = ThemeDB.fallback_font
+	_font = GameFonts.ui_font
 
 
 func _process(_delta: float) -> void:
@@ -59,11 +59,9 @@ func _draw_combat_hud(st: RunState) -> void:
 		var x := start_x + i * (slot_w + 8)
 		draw_rect(Rect2(x, slot_y, slot_w, 72), Color("#0a0404"))
 		draw_rect(Rect2(x, slot_y, slot_w, 72), GameColors.GOLD, false, 2.0)
+		var label: String = str(st.reel_results[i])
 		var slot_rect := Rect2(x, slot_y, slot_w, 72)
-		if st.reel_results[i] == "?":
-			UiDraw.draw_in_rect(self, _font, slot_rect, "?", 24, GameColors.TEXT_GOLD)
-		elif i < st.reel_result_keys.size():
-			TokenIcons.draw(self, st.reel_result_keys[i], slot_rect, GameColors.TEXT_GOLD)
+		UiDraw.draw_in_rect(self, _font, slot_rect, label, 24, GameColors.TEXT_GOLD)
 
 	UiDraw.draw_centered_on_screen(self, _font, size.x, size.y - 14, "WASD · Mouse · Click · Shift dash · Q ruletas", size.x, 11, GameColors.TEXT_GOLD)
 
