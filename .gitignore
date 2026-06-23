@@ -32,9 +32,10 @@ Desktop.ini
 .idea/
 *.code-workspace
 
-# Exportaciones nativas sueltas en la raíz
+# Exportaciones nativas (la build web en builds/Web/ sí se publica)
 *.exe
-*.pck
 *.zip
 *.apk
 *.aab
+*.pck
+!builds/Web/*.pck
