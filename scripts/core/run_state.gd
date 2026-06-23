@@ -3,6 +3,7 @@ extends RefCounted
 
 var player := {}
 var bullets: Array = []
+var beams: Array = []
 var enemies: Array = []
 var hazards: Array = []
 var hit_effects: Array = []
@@ -44,6 +45,11 @@ var combo_decay_multiplier := 1.0
 var pity_bonus := 0
 var speed_bonus := 0.0
 
+var reel_costs: Array = []
+var token_shop_slot_index := -1
+var reel_selected_slot = null
+var moving_token_from = null
+
 var shop_hover_token := -1
 var shop_hover_passive := -1
 var reel_hover_slot = null
@@ -60,6 +66,7 @@ func init_run() -> void:
 		"angle": 0.0
 	}
 	bullets.clear()
+	beams.clear()
 	enemies.clear()
 	hazards.clear()
 	hit_effects.clear()
@@ -75,6 +82,7 @@ func init_run() -> void:
 	combo_timer = 0.0
 	last_shot_at = 0.0
 	reels = MagazineSystem.create_empty_reels()
+	reel_costs = MagazineSystem.create_empty_reel_costs()
 	reel_results = ["?", "?", "?"]
 	reel_result_keys.clear()
 	next_reel_index = 0
@@ -87,6 +95,9 @@ func init_run() -> void:
 	placing_token = null
 	place_reel_index = 0
 	place_slot_index = 0
+	token_shop_slot_index = -1
+	reel_selected_slot = null
+	moving_token_from = null
 	free_tokens_remaining = Balance.INITIAL_FREE_TOKENS
 	has_started_run = false
 	base_magazine_bonus = 0
@@ -98,3 +109,7 @@ func init_run() -> void:
 	shop_hover_passive = -1
 	reel_hover_slot = null
 	objective_text = "TIENDA INICIAL · ELEGÍ 2 TOKENS GRATIS"
+
+
+static func is_token_offer_empty(offer) -> bool:
+	return offer == null or not offer is Dictionary or not offer.has("key")

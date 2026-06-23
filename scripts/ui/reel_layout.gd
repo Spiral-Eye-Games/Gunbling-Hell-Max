@@ -42,3 +42,11 @@ static func slot_rect(reel_index: int, slot_index: int) -> Rect2:
 	var x := grid_start_x() + col * (CELL_W + CELL_GAP_X)
 	var y := block_start_y(reel_index) + LABEL_H + row * (CELL_H + CELL_GAP_Y)
 	return Rect2(x, y, CELL_W, CELL_H)
+
+
+static func action_move_rect(anchor: Rect2) -> Rect2:
+	return Rect2(anchor.position.x, anchor.position.y + anchor.size.y + 6, anchor.size.x, 28)
+
+
+static func action_sell_rect(anchor: Rect2) -> Rect2:
+	return Rect2(anchor.position.x, anchor.position.y + anchor.size.y + 38, anchor.size.x, 28)

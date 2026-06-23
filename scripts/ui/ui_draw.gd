@@ -5,6 +5,12 @@ static func text_baseline_y(font: Font, rect: Rect2, font_size: int) -> float:
 	return rect.position.y + (rect.size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
 
 
+static func wrapped_text_height(font: Font, text: String, font_size: int, width: float) -> float:
+	if text.is_empty():
+		return 0.0
+	return font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, width, font_size).y
+
+
 static func draw_in_rect(
 	canvas: CanvasItem,
 	font: Font,
@@ -21,6 +27,30 @@ static func draw_in_rect(
 		alignment,
 		rect.size.x,
 		font_size,
+		color
+	)
+
+
+static func draw_wrapped_in_rect(
+	canvas: CanvasItem,
+	font: Font,
+	rect: Rect2,
+	text: String,
+	font_size: int,
+	color: Color,
+	alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT
+) -> void:
+	if text.is_empty():
+		return
+	var y: float = rect.position.y + font.get_ascent(font_size)
+	canvas.draw_multiline_string(
+		font,
+		Vector2(rect.position.x, y),
+		text,
+		alignment,
+		rect.size.x,
+		font_size,
+		-1,
 		color
 	)
 

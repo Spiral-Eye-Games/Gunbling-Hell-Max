@@ -10,6 +10,7 @@ const PLAYER_BASE_HP := 125.0
 const PLAYER_BASE_SPEED := 265.0
 const SHOP_REROLL_COST := 50
 const INITIAL_FREE_TOKENS := 2
+const TOKEN_SELL_RATIO := 0.75
 
 
 func get_required_kills(round_num: int) -> int:

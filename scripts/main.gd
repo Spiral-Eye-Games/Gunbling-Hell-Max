@@ -61,6 +61,7 @@ func _update_combat(delta: float) -> void:
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_try_shoot(aim)
 	BulletSystem.update_bullets(state, delta, self)
+	BeamSystem.update_beams(state, delta)
 	EnemySystem.update_enemies(state, delta, self)
 	HazardSystem.update_hazards(state, delta, self)
 	ComboSystem.update_combo(state, delta)
@@ -75,6 +76,7 @@ func _update_boss(delta: float) -> void:
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_try_shoot(aim)
 	BulletSystem.update_bullets(state, delta, self)
+	BeamSystem.update_beams(state, delta)
 	BossSystem.update_boss(state, delta, self)
 	HazardSystem.update_hazards(state, delta, self)
 	ComboSystem.update_combo(state, delta)
@@ -82,7 +84,7 @@ func _update_boss(delta: float) -> void:
 
 func _try_shoot(aim: Vector2) -> void:
 	var before: int = int(state.current_magazine.get("ammo", 0))
-	ShootingSystem.try_shoot(state, aim, Time.get_ticks_msec())
+	ShootingSystem.try_shoot(state, aim, Time.get_ticks_msec(), self)
 	if before > 0 and int(state.current_magazine.get("ammo", 0)) <= 0:
 		_reload_pending = true
 		_reload_timer = 0.22

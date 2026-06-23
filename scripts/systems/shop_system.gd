@@ -21,6 +21,21 @@ static func generate_shop_offers(state: RunState) -> void:
 	state.shop_hover_passive = -1
 
 
+static func _clear_token_offer_slot(state: RunState, index: int) -> void:
+	if index >= 0 and index < state.token_offers.size():
+		state.token_offers[index] = null
+
+
+static func get_token_sell_price(state: RunState, reel: int, slot: int) -> int:
+	var token_key = state.reels[reel][slot]
+	if token_key == null:
+		return 0
+	var purchase_cost: int = int(state.reel_costs[reel][slot])
+	if purchase_cost <= 0:
+		purchase_cost = Balance.get_token_cost(token_key, state.round_num)
+	return int(floor(float(purchase_cost) * Balance.TOKEN_SELL_RATIO))
+
+
 static func _apply_passive(state: RunState, effect: String) -> void:
 	match effect:
 		"magazineBonus":
@@ -43,18 +58,28 @@ static func _apply_passive(state: RunState, effect: String) -> void:
 static func buy_token_offer(state: RunState, index: int, game: Node) -> void:
 	if index < 0 or index >= state.token_offers.size():
 		return
-	var offer: Dictionary = state.token_offers[index]
+	var offer = state.token_offers[index]
+	if RunState.is_token_offer_empty(offer):
+		return
+	if state.placing_token != null:
+		return
+	state.reel_selected_slot = null
+	state.moving_token_from = null
 	if state.phase == "initialShop":
 		if state.free_tokens_remaining <= 0:
 			return
+		state.token_shop_slot_index = index
 		state.placing_token = offer.key
+		_clear_token_offer_slot(state, index)
 		state.objective_text = "COLOCÁ TOKEN GRATIS: " + GameData.TOKENS[offer.key].name
 		return
 	if state.chips < offer.cost:
 		game.show_floating_message("SIN FICHAS", offer.name)
 		return
 	state.chips -= offer.cost
+	state.token_shop_slot_index = index
 	state.placing_token = offer.key
+	_clear_token_offer_slot(state, index)
 	state.objective_text = "COLOCÁ TOKEN: " + GameData.TOKENS[offer.key].name
 
 
@@ -77,25 +102,71 @@ static func buy_passive_offer(state: RunState, index: int, game: Node) -> void:
 static func place_token_in_slot(state: RunState) -> void:
 	if state.placing_token == null:
 		return
+	var purchase_cost := 0
+	if state.token_shop_slot_index >= 0:
+		purchase_cost = 0 if state.phase == "initialShop" else Balance.get_token_cost(state.placing_token, state.round_num)
 	state.reels[state.place_reel_index][state.place_slot_index] = state.placing_token
+	state.reel_costs[state.place_reel_index][state.place_slot_index] = purchase_cost
 	var token_name: String = GameData.TOKENS[state.placing_token].name
+	state.placing_token = null
+	state.token_shop_slot_index = -1
 	if state.phase == "initialShop":
 		state.free_tokens_remaining -= 1
 		if state.free_tokens_remaining <= 0:
-			state.placing_token = null
 			state.objective_text = "LISTO · CONTINUAR PARA EMPEZAR LA RUN"
-			generate_shop_offers(state)
-			return
-		state.placing_token = null
-		state.objective_text = "TIENDA INICIAL · ELEGÍ %d TOKEN GRATIS" % state.free_tokens_remaining
-		generate_shop_offers(state)
+		else:
+			state.objective_text = "TIENDA INICIAL · ELEGÍ %d TOKEN GRATIS" % state.free_tokens_remaining
 		return
-	state.placing_token = null
 	state.objective_text = "TOKEN COLOCADO: %s · CONTINUAR PARA DESCENDER" % token_name
-	generate_shop_offers(state)
+
+
+static func start_move_reel_token(state: RunState, reel: int, slot: int) -> void:
+	if state.reels[reel][slot] == null:
+		return
+	state.moving_token_from = {"reel": reel, "slot": slot}
+	state.reel_selected_slot = null
+	state.objective_text = "ELEGÍ SLOT DESTINO PARA MOVER EL TOKEN"
+
+
+static func complete_move_reel_token(state: RunState, to_reel: int, to_slot: int) -> void:
+	if state.moving_token_from == null:
+		return
+	var from_reel: int = int(state.moving_token_from["reel"])
+	var from_slot: int = int(state.moving_token_from["slot"])
+	if from_reel == to_reel and from_slot == to_slot:
+		state.moving_token_from = null
+		state.objective_text = ""
+		return
+	var token_key = state.reels[from_reel][from_slot]
+	var token_cost: int = int(state.reel_costs[from_reel][from_slot])
+	var target_key = state.reels[to_reel][to_slot]
+	var target_cost: int = int(state.reel_costs[to_reel][to_slot])
+	state.reels[to_reel][to_slot] = token_key
+	state.reel_costs[to_reel][to_slot] = token_cost
+	state.reels[from_reel][from_slot] = target_key
+	state.reel_costs[from_reel][from_slot] = target_cost
+	state.moving_token_from = null
+	state.objective_text = ""
+
+
+static func sell_reel_token(state: RunState, reel: int, slot: int, game: Node) -> void:
+	var token_key = state.reels[reel][slot]
+	if token_key == null:
+		return
+	var sell_price: int = get_token_sell_price(state, reel, slot)
+	state.chips += sell_price
+	state.reels[reel][slot] = null
+	state.reel_costs[reel][slot] = 0
+	state.reel_selected_slot = null
+	state.moving_token_from = null
+	game.show_floating_message("VENDIDO · +%d" % sell_price, GameData.TOKENS[token_key].name)
 
 
 static func reroll_shop(state: RunState, game: Node) -> void:
+	if state.placing_token != null:
+		return
+	state.reel_selected_slot = null
+	state.moving_token_from = null
 	if state.phase == "initialShop":
 		generate_shop_offers(state)
 		return
@@ -109,6 +180,11 @@ static func reroll_shop(state: RunState, game: Node) -> void:
 static func continue_shop(state: RunState, game: Node) -> void:
 	if state.placing_token != null:
 		return
+	if state.moving_token_from != null:
+		state.moving_token_from = null
+		state.objective_text = ""
+		return
+	state.reel_selected_slot = null
 	if state.phase == "initialShop":
 		if state.free_tokens_remaining <= 0:
 			start_run(state)
@@ -122,6 +198,8 @@ static func start_run(state: RunState) -> void:
 	state.phase = "combat"
 	state.has_started_run = true
 	state.objective_text = ""
+	state.reel_selected_slot = null
+	state.moving_token_from = null
 	EnemySystem.spawn_wave(state, 5)
 
 
@@ -129,7 +207,10 @@ static func enter_shop(state: RunState) -> void:
 	state.phase = "shop"
 	state.enemies.clear()
 	state.bullets.clear()
+	state.beams.clear()
 	state.hazards.clear()
+	state.reel_selected_slot = null
+	state.moving_token_from = null
 	state.objective_text = "RONDA LIMPIA · COMPRÁ O CONTINUÁ PARA DESCENDER"
 	generate_shop_offers(state)
 
@@ -143,5 +224,7 @@ static func descend_to_next_round(state: RunState) -> void:
 	state.kills_this_round = 0
 	state.required_kills = Balance.get_required_kills(state.round_num)
 	state.objective_text = ""
+	state.reel_selected_slot = null
+	state.moving_token_from = null
 	MagazineSystem.refresh_base_magazine(state)
 	EnemySystem.spawn_wave(state, Balance.get_wave_size(state.round_num))

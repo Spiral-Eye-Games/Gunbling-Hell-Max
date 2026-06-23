@@ -40,6 +40,14 @@ func _draw_entities(st: RunState) -> void:
 	for bullet in st.bullets:
 		draw_circle(Vector2(bullet.x, bullet.y), bullet.radius, bullet.color)
 
+	for beam in st.beams:
+		var alpha: float = clampf(float(beam.life) / float(beam.max_life), 0.0, 1.0)
+		var from := Vector2(beam.x1, beam.y1)
+		var to := Vector2(beam.x2, beam.y2)
+		var beam_color: Color = Color(beam.color, 0.25 * alpha)
+		draw_line(from, to, beam_color, float(beam.width) + 6.0)
+		draw_line(from, to, Color(beam.color, 0.85 * alpha), float(beam.width))
+
 	for enemy in st.enemies:
 		draw_circle(Vector2(enemy.x, enemy.y), enemy.radius, enemy.color)
 		var hp_ratio: float = float(enemy.hp) / float(enemy.max_hp)

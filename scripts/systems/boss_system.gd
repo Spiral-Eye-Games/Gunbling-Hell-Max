@@ -7,6 +7,7 @@ static func start_boss_fight(state: RunState) -> void:
 	state.enemies.clear()
 	state.hazards.clear()
 	state.bullets.clear()
+	state.beams.clear()
 	MagazineSystem.refresh_base_magazine(state)
 	state.objective_text = "RONDA 66 · BOSS FINAL · SATANÁS"
 	state.boss = {

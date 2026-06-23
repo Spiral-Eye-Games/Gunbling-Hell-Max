@@ -28,8 +28,8 @@ const TOKENS := {
 		"key": "laser",
 		"label": "7",
 		"name": "LÁSER",
-		"short": "atraviesa / -1 bala",
-		"shop_description": "Las balas atraviesan. Más tokens aumentan el ancho. -1 bala."
+		"short": "haz láser / -1 bala",
+		"shop_description": "Dispara un haz de luz que atraviesa. Más tokens aumentan el ancho. -1 bala."
 	}
 }
 

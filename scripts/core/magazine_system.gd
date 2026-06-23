@@ -28,7 +28,6 @@ static func create_base_magazine(bonuses: Dictionary) -> Dictionary:
 		"bullet_damage": Balance.BASE_BULLET_DAMAGE + float(bonuses.get("base_damage_bonus", 0)),
 		"explosive": false,
 		"explosion_radius": 0.0,
-		"piercing": false,
 		"laser_width": 0.0
 	}
 
@@ -63,8 +62,7 @@ static func build_magazine_from_results(result_keys: Array, bonuses: Dictionary)
 	var fire_cooldown_ms: float = maxf(45.0, Balance.BASE_FIRE_COOLDOWN_MS * pow(0.72, machine_count))
 	var explosive: bool = missile_count > 0
 	var explosion_radius: float = 42.0 + missile_count * 28.0 if explosive else 0.0
-	var piercing: bool = laser_count > 0
-	var laser_width: float = 6.0 + laser_count * 5.0 if piercing else 0.0
+	var laser_width: float = 6.0 + laser_count * 5.0 if laser_count > 0 else 0.0
 	var bullet_damage: float = Balance.BASE_BULLET_DAMAGE + float(bonuses.get("base_damage_bonus", 0)) + missile_count * 0.4 + laser_count * 0.35
 	var bullet_speed: float = Balance.BASE_BULLET_SPEED + machine_count * 55.0 + laser_count * 90.0 - missile_count * 80.0
 
@@ -83,7 +81,6 @@ static func build_magazine_from_results(result_keys: Array, bonuses: Dictionary)
 		"bullet_damage": bullet_damage,
 		"explosive": explosive,
 		"explosion_radius": explosion_radius,
-		"piercing": piercing,
 		"laser_width": laser_width
 	}
 
@@ -120,6 +117,16 @@ static func get_bullet_color(magazine: Dictionary) -> Color:
 	if int(magazine.get("shotgun_tokens", 0)) > 0:
 		return GameColors.SHOTGUN
 	return GameColors.BULLET
+
+
+static func create_empty_reel_costs() -> Array:
+	var costs: Array = []
+	for _r in GameConstants.REEL_COUNT:
+		var row: Array = []
+		row.resize(GameConstants.SLOTS_PER_REEL)
+		row.fill(0)
+		costs.append(row)
+	return costs
 
 
 static func get_magazine_bonuses(state: RunState) -> Dictionary:

@@ -22,7 +22,9 @@ const ACTION_BTN_Y := 600
 const REROLL_BTN_X := 36
 const CONTINUE_BTN_X := 688
 const TOOLTIP_W := 216
-const TOOLTIP_H := 124
+const TOOLTIP_MIN_H := 124
+const TOOLTIP_PAD_TOP := 38
+const TOOLTIP_PAD_BOTTOM := 30
 
 
 static func chips_bar_rect() -> Rect2:

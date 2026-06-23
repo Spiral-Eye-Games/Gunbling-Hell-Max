@@ -1,10 +1,12 @@
 # GDD — Gunbling Hell: Versión Top-Down 2D
 
 **Documento:** Game Design Document / Registro de diseño  
-**Versión:** Prototipo top-down navegador  
+**Versión:** Prototipo top-down Godot 4  
 **Estado:** En proceso  
-**Formato objetivo:** Juego 2D top-down para navegador, hecho en Phaser  
+**Formato objetivo:** Juego 2D top-down (Godot 4; build web en GitHub Pages)  
+**Motor actual:** Godot 4.7 · prototipo Phaser archivado en `legacy/`  
 **Fecha:** 2026-06-22  
+**Última actualización:** 2026-06-23  
 
 ---
 
@@ -84,25 +86,23 @@ En top-down, la experiencia se centra más en:
 | Apuntar | Mouse |
 | Disparar | Click izquierdo |
 | Dash | Shift / Space |
+| Colapsar / expandir panel de ruletas | Q |
 | Reiniciar luego de derrota/victoria | F |
 
-### Tienda
+### Tienda y ruletas
+
+La tienda y las ruletas se manejan **solo con mouse** (sin navegación por teclado).
 
 | Acción | Control |
 |---|---|
-| Cambiar sección Tokens / Pasivas | TAB |
-| Mover selección | A / D |
-| Comprar / elegir | E |
-| Reroll | R |
-| Avanzar a la siguiente ronda | F |
-
-### Colocación de tokens
-
-| Acción | Control |
-|---|---|
-| Cambiar ruleta | Flecha arriba / abajo |
-| Cambiar slot | Flecha izquierda / derecha |
-| Colocar token | E |
+| Comprar token / pasiva | Click en la oferta |
+| Reroll de tienda | Click en **REROLL** |
+| Avanzar / empezar run | Click en **CONTINUAR** / **EMPEZAR RUN** |
+| Colocar token comprado | Click en slot de ruleta |
+| Seleccionar token ya colocado | Click en slot con token (en tienda) |
+| Mover token entre slots | Click en **MOVER** → click en slot destino |
+| Vender token colocado | Click en **VENDER · X** |
+| Ver tooltips | Hover sobre ofertas o tokens en ruletas |
 
 ---
 
@@ -284,7 +284,7 @@ Efecto:
 Las balas explotan al impactar.
 
 Escalado:
-Más tokens de Misil aumentan el área de explosión.
+Más tokens de Misil aumentan el área de explosión (no el tamaño de la bala).
 
 Costo:
 -2 balas en el cargador por cada token de Misil.
@@ -303,6 +303,7 @@ Función de diseño:
 - Alto impacto contra grupos.
 - Recompensa juntar enemigos.
 - Puede dejar muy poca munición, por lo que funciona como apuesta fuerte.
+- Las balas mantienen tamaño normal; solo la explosión escala.
 
 ---
 
@@ -310,10 +311,10 @@ Función de diseño:
 
 ```text
 Efecto:
-Las balas atraviesan enemigos.
+Dispara un haz de luz instantáneo (hitscan) que atraviesa enemigos en línea.
 
 Escalado:
-Más tokens de Láser aumentan el ancho/hitbox del láser.
+Más tokens de Láser aumentan el ancho del haz.
 
 Costo:
 -1 bala en el cargador por cada token de Láser.
@@ -322,9 +323,9 @@ Costo:
 Ejemplos:
 
 ```text
-1 Láser = atraviesa enemigos, -1 bala
-2 Láseres = láser más ancho, -2 balas
-3 Láseres = láser muy ancho, -3 balas
+1 Láser = haz fino, -1 bala
+2 Láseres = haz más ancho, -2 balas
+3 Láseres = haz muy ancho, -3 balas
 ```
 
 Función de diseño:
@@ -332,6 +333,8 @@ Función de diseño:
 - Recompensa alinear enemigos.
 - Excelente contra hordas en línea.
 - Potente contra enemigos grandes o boss.
+- No es un proyectil: es un beam visual breve con daño inmediato a lo largo del trayecto.
+- Si el cargador también tiene Misil, el haz puede explotar en cada impacto.
 
 ---
 
@@ -352,9 +355,11 @@ Mínimo absoluto: 1 bala
 Vacío: +3 balas
 Escopeta: +2 proyectiles, -1 bala
 Metralleta: +cadencia, +5 balas
-Misil: explosión, +área, -2 balas
-7 / Láser: atraviesa, +ancho, -1 bala
+Misil: explosión, +área de explosión, -2 balas (balas de tamaño normal)
+7 / Láser: haz de luz, +ancho del haz, -1 bala
 ```
+
+Si el cargador incluye al menos un token de Láser, **todos los disparos de ese cargador son haces** (no balas proyectiles). Escopeta en un cargador con láser produce múltiples haces con spread.
 
 ### Ejemplo 1
 
@@ -387,7 +392,7 @@ Cálculo:
 = 1 bala
 
 Efecto:
-Una bala con múltiples proyectiles, explosión y piercing.
+Un disparo con múltiples haces (escopeta), explosión en impacto (misil) y ancho de haz (láser).
 ```
 
 ### Ejemplo 3
@@ -433,33 +438,29 @@ Objetivo de diseño:
 
 Luego de limpiar una ronda, el jugador accede a la tienda.
 
-La tienda tiene dos secciones:
+### Layout actual
 
 ```text
-Tokens de ruleta
-Pasivas
+Arriba: barra de fichas + título de tienda
+Centro: grid 3×2 de tokens (6 ofertas)
+Abajo: 3 cards de pasivas
+Botones: REROLL (izq) · CONTINUAR (der)
+Derecha: panel de ruletas (3×6 slots)
 ```
 
 ### Tokens de ruleta
 
-Permiten comprar nuevos tokens para colocarlos en las ruletas.
-
-Ejemplos:
-
-```text
-Token Escopeta
-Token Metralleta
-Token Misil
-Token Láser
-```
-
-Luego de comprar un token, el jugador debe colocarlo manualmente en un slot.
-
-Puede colocarlo en un slot vacío o reemplazar un token anterior.
+- Grid de **6 ofertas** visibles a la vez.
+- Al **comprar** un token, el casillero de esa oferta queda **vacío** (no se rerollea toda la tienda).
+- Tras comprar, el jugador entra en modo colocación: overlay oscuro + click en slot de ruleta.
+- **Reroll** regenera todas las ofertas (gratis en tienda inicial; cuesta fichas en tienda normal).
+- Tooltips al hover: icono, nombre, descripción con **word wrap**, precio a la derecha.
 
 ### Pasivas
 
 Son mejoras generales de la run.
+
+En **tienda inicial** las pasivas aparecen como **BLOQUEADO**.
 
 Ejemplos actuales:
 
@@ -471,6 +472,21 @@ Botas del pecado
 Curación
 Combo pegado
 ```
+
+### Gestión de tokens ya colocados
+
+En tienda (no en combate), el jugador puede interactuar con tokens **ya puestos en las ruletas**:
+
+```text
+Click en token colocado → botones flotantes MOVER / VENDER
+Hover → tooltip con descripción, efecto resumido y precio de venta
+```
+
+**Mover:** elige otro slot; si hay otro token, se intercambian.
+
+**Vender:** devuelve fichas al **75%** del precio de compra registrado (`TOKEN_SELL_RATIO = 0.75`). Tokens gratis de la tienda inicial se venden por 0 fichas.
+
+Cada slot guarda el precio de compra para calcular la reventa.
 
 ---
 
@@ -512,13 +528,13 @@ Prioriza el token 7 / Láser.
 
 ```text
 Objetivo:
-Alinear enemigos y atravesarlos.
+Alinear enemigos y atravesarlos con haces.
 
 Ventaja:
 Muy fuerte contra hordas y enemigos grandes.
 
 Desventaja:
-Depende del posicionamiento.
+Depende del posicionamiento; consume munición por disparo de haz.
 ```
 
 ### Build jackpot
@@ -688,25 +704,29 @@ Fase 4: castiga builds demasiado repetidas.
 
 ## 20. UI actual
 
+Resolución fija: **1280×720**. UI dibujada con `_draw()` en Godot (sin escenas de nodos por widget de tienda).
+
 ### HUD de combate
 
 Elementos principales:
 
 ```text
 HP
-Dash
-Resultado de ruleta
-Balas del cargador
-Modificadores activos del cargador
 Combo
 Puntuación
 Fichas
-Ronda actual
+Ronda actual / objetivo
+3 slots de resultado de ruleta (último cargador)
+Panel de ruletas colapsable (Q)
 ```
+
+El panel de stats grande (puntuación/combo/fichas) se oculta en tienda.
 
 ### Panel de ruletas
 
-Muestra las 3 ruletas del jugador y sus 6 slots.
+A la derecha de la tienda; centrado verticalmente respecto al panel de compras.
+
+Muestra las 3 ruletas del jugador y sus 6 slots (grid 3×2 por ruleta).
 
 Cada slot puede mostrar:
 
@@ -718,18 +738,21 @@ Cada slot puede mostrar:
 7 = Láser
 ```
 
+En tienda: tooltips con descripción envuelta y precio de venta. En combate: panel colapsable con **Q**.
+
 ### UI de tienda
 
-Muestra:
-
 ```text
-Sección actual: Tokens / Pasivas
-Ofertas disponibles
-Costo
-Descripción
-Cursor de selección
-Panel de colocación de tokens
+Barra de fichas (arriba izq)
+Título contextual (tienda inicial / inframundo)
+Grid 3×2 de tokens con icono + precio
+3 cards de pasivas (bloqueadas en tienda inicial)
+Botones REROLL y CONTINUAR
+Tooltips con wrap al hover
+Casilleros vacíos tras compra (sin reroll automático)
 ```
+
+Fuentes embebidas (**Noto Sans** + **Noto Sans Symbols 2**) para iconos Unicode en web y desktop.
 
 ---
 
@@ -755,7 +778,7 @@ Panel de colocación de tokens
 - El jugador construye su propia probabilidad.
 - El jugador alterna entre combate frenético y planificación en tienda.
 - Las ruletas generan resultados variables, pero influenciados por la build.
-- El jugador decide si priorizar consistencia, burst damage, munición, área o piercing.
+- El jugador decide si priorizar consistencia, burst damage, munición, área o haces láser.
 - La presión del combo empuja a jugar agresivamente.
 - Las fichas empujan a limpiar rondas y sostener performance.
 
@@ -831,6 +854,8 @@ Esto es importante porque transforma el azar en estrategia.
 
 ## 23. Estado actual del prototipo
 
+**Motor:** Godot 4.7 (GDScript). Build web exportable a `builds/Web/` con deploy automático a GitHub Pages.
+
 Implementado:
 
 ```text
@@ -838,24 +863,34 @@ Movimiento WASD
 Apuntado con mouse
 Disparo con click
 Dash
+Haz láser (token 7) como beam hitscan, no proyectil
+Misiles: solo escalan radio de explosión, no tamaño de bala
 Sistema de ruletas editables
 3 ruletas de 6 slots
 Slots vacíos que dan +3 balas
 Tokens: Escopeta, Metralleta, Misil, Láser
 Cargadores modificados
 Tienda inicial con 2 tokens gratis
-Tienda con tokens y pasivas
+Tienda con 6 tokens + 3 pasivas
+UI de tienda solo mouse
+Casillero vacío al comprar token (sin reroll total)
+Tooltips con word wrap
 Colocación manual de tokens
+Mover y vender tokens en ruletas (75% del precio de compra)
 Combo
 Puntuación
 Fichas
 Enemigos básicos
-Enemigos con veneno
+Enemigos con veneno (spitter)
 Hazards
 Ronda 66
 Boss final Satanás
 HUD básico
+Panel de ruletas colapsable (Q)
+Fuentes embebidas para web
 ```
+
+Archivado en `legacy/`: prototipo original Phaser + Vite.
 
 ---
 
@@ -877,24 +912,25 @@ Agregar sinergias entre tokens.
 ### Ruletas
 
 ```text
-Permitir mover tokens ya colocados.
-Permitir vender tokens.
 Agregar rarezas de tokens.
 Agregar tokens con efectos negativos pero poderosos.
 Agregar locks de slots.
 Agregar ruletas especiales.
 Agregar tokens que modifican otras ruletas.
+Ajustar ratio de venta de tokens (actualmente 75%).
+Permitir vender tokens gratis por un valor distinto de 0.
 ```
 
 ### Tienda
 
 ```text
-Mejorar interfaz visual.
+Mejorar interfaz visual (sprites, animaciones).
 Agregar tienda especial cada 10 rondas.
 Agregar descuentos.
 Agregar sacrificios: vida por token.
 Agregar reroll más caro cada vez.
 Agregar elección entre recompensa inmediata o mejora de ruleta.
+Confirmación antes de vender token.
 ```
 
 ### Boss
@@ -940,9 +976,14 @@ La tienda inicial da 2 tokens gratuitos.
 El jugador tiene 3 ruletas.
 Cada ruleta tiene 6 slots.
 Los slots vacíos dan +3 balas.
-Los tokens se colocan manualmente.
-La tienda vende pasivas y tokens.
+Los tokens se colocan manualmente con mouse.
+Al comprar un token, su casillero de tienda queda vacío.
+La tienda vende 6 tokens y 3 pasivas por visita.
+Se pueden mover y vender tokens ya colocados (venta al 75%).
+El láser es un haz, no un proyectil.
+Los misiles solo escalan explosión, no el tamaño de bala.
 El cargador se construye con el resultado de las 3 ruletas.
+Controles de tienda solo mouse; combate con WASD + mouse.
 ```
 
 ---
@@ -953,12 +994,13 @@ El cargador se construye con el resultado de las 3 ruletas.
 ¿La tienda debería aparecer cada ronda o cada cierta cantidad de rondas?
 ¿Los tokens deberían tener rareza?
 ¿Conviene que los slots vacíos siempre den +3 balas o debería escalar?
-¿Se deberían poder mover tokens ya colocados?
-¿Los tokens reemplazados se pierden o vuelven al inventario?
+¿El ratio de venta (75%) es el correcto?
+¿Los tokens reemplazados al colocar uno nuevo se pierden o deberían ir al inventario?
 ¿Satanás debería copiar parte de la build del jugador?
 ¿Debería haber mini-bosses antes de ronda 66?
 ¿El jugador debería poder elegir entre varias arenas?
 ¿La tienda inicial debería dar 2 tokens o 3?
+¿Mover token solo a slots vacíos o mantener intercambio?
 ```
 
 ---
@@ -967,7 +1009,7 @@ El cargador se construye con el resultado de las 3 ruletas.
 
 El jugador entra a la tienda inicial y elige dos tokens. Los coloca en sus ruletas para definir una primera inclinación de build. Empieza la ronda 1 y combate contra demonios básicos. Cada impacto activa una ruleta y cada tres impactos se genera un nuevo cargador. A veces salen muchos vacíos y recibe muchas balas; a veces salen tokens y obtiene efectos más poderosos pero con menor munición.
 
-Al limpiar rondas, compra pasivas o nuevos tokens. Cada token comprado se coloca estratégicamente en alguna de las tres ruletas. Con el avance de la run, el arma deja de ser aleatoria y pasa a expresar la estrategia del jugador. Puede construir una ruleta segura, explosiva, rápida, láser o híbrida.
+Al limpiar rondas, compra pasivas o nuevos tokens. Cada token comprado se coloca estratégicamente en alguna de las tres ruletas; puede reorganizar o vender tokens previos en la tienda. Con el avance de la run, el arma deja de ser aleatoria y pasa a expresar la estrategia del jugador. Puede construir una ruleta segura, explosiva, rápida, de haces láser o híbrida.
 
 El combo empuja a jugar rápido y agresivo. Las fichas recompensan matar enemigos y sostener el flow. La tienda ofrece pausas de planificación. Finalmente, en la ronda 66, el jugador enfrenta a Satanás con la build que fue construyendo durante toda la run.
 
@@ -975,16 +1017,16 @@ El combo empuja a jugar rápido y agresivo. Las fichas recompensan matar enemigo
 
 ## 28. Próximo objetivo recomendado
 
-El próximo paso de diseño debería ser mejorar la tienda y la manipulación de tokens.
-
-Prioridad sugerida:
+Prioridad sugerida de diseño e implementación:
 
 ```text
 1. Hacer que la tienda aparezca cada X rondas en lugar de todas las rondas.
-2. Permitir mover tokens ya colocados.
+2. Ajustar economía de venta de tokens y precios por ronda.
 3. Agregar rarezas de tokens.
 4. Agregar un mini-boss cada 10 rondas.
 5. Agregar nuevas arenas para evitar repetición.
+6. Pulir feedback visual de haces, explosiones y UI de tienda.
+7. Audio (ruleta, jackpot, disparos, fichas).
 ```
 
 ---
