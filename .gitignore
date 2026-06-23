@@ -1,3 +1,40 @@
+# Godot 4
+.godot/
+*.import
+
+# Credenciales de export (no subir)
+.godot/export_credentials.cfg
+
+# Builds locales (excepto web publicada en Pages)
+builds/*
+!builds/Web/
+!builds/Web/**
+
+# Legacy Phaser / Node
+legacy/node_modules/
+legacy/dist/
 node_modules/
-dist/
-*.local
+
+# Logs y caché
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editores / IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Exportaciones nativas sueltas en la raíz
+*.exe
+*.pck
+*.zip
+*.apk
+*.aab
