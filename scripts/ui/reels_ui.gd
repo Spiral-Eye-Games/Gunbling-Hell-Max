@@ -55,10 +55,10 @@ func _draw() -> void:
 			var selected: bool = st.placing_token != null and st.place_reel_index == r and st.place_slot_index == s
 			draw_rect(sr, fill)
 			draw_rect(sr, Color.WHITE if (hover or selected) else GameColors.GOLD, false, 2.0)
-			var label: String = "□"
 			if token_key != null:
-				label = str(GameData.TOKENS[token_key].label)
-			UiDraw.draw_in_rect(self, _font, sr, label, 14, GameColors.TEXT_PALE)
+				TokenIcons.draw(self, token_key, sr, GameColors.TEXT_PALE)
+			else:
+				TokenIcons.draw_empty(self, sr, GameColors.TEXT_PALE)
 
 	if st.reel_hover_slot != null:
 		var reel: int = int(st.reel_hover_slot["reel"])
@@ -83,7 +83,7 @@ func _draw_token_tooltip(token_key: String, anchor: Rect2) -> void:
 	var name_rect := Rect2(x + 44, y + 10, tw - 56, 24)
 	var desc_rect := Rect2(x + 12, y + 38, tw - 24, 56)
 	var footer_rect := Rect2(x + 12, y + th - 26, tw - 24, 20)
-	UiDraw.draw_in_rect(self, _font, icon_rect, token.label, 18, GameColors.TEXT_GOLD)
+	TokenIcons.draw(self, token_key, icon_rect, GameColors.TEXT_GOLD)
 	UiDraw.draw_in_rect(self, _font, name_rect, token.name, 14, GameColors.TEXT_PALE, HORIZONTAL_ALIGNMENT_LEFT)
 	UiDraw.draw_in_rect(self, _font, desc_rect, token.shop_description, 11, Color("#c8b890"), HORIZONTAL_ALIGNMENT_LEFT)
 	UiDraw.draw_in_rect(self, _font, footer_rect, token.short, 12, GameColors.TEXT_GOLD, HORIZONTAL_ALIGNMENT_RIGHT)
