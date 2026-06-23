@@ -26,7 +26,6 @@ GameConstants="*res://scripts/autoload/game_constants.gd"
 GameColors="*res://scripts/autoload/game_colors.gd"
 Balance="*res://scripts/autoload/balance.gd"
 GameData="*res://scripts/autoload/game_data.gd"
-GameFonts="*res://scripts/autoload/game_fonts.gd"
 
 [display]
 

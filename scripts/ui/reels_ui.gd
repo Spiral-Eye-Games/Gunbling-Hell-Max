@@ -9,7 +9,7 @@ func setup(main: Node) -> void:
 	game = main
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = GameFonts.ui_font
+	_font = GameUiFont.get_font()
 
 
 func _process(_delta: float) -> void:
